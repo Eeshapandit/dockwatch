@@ -40,3 +40,21 @@ def clean_status_feed(payload):
             continue
         rows.append(clean_station(s))
     return rows
+
+
+def clean_station_info(s):
+    """One raw station_information dict -> one clean row for the dimension table."""
+    return {
+        "station_id": s["station_id"],
+        "name": s["name"],
+        "short_name": s.get("short_name"),
+        "lat": s.get("lat"),
+        "lon": s.get("lon"),
+        "capacity": s.get("capacity"),
+        "region_id": s.get("region_id"),
+    }
+
+
+def clean_info_feed(payload):
+    """Whole station_information payload -> list of clean rows."""
+    return [clean_station_info(s) for s in payload["data"]["stations"]]
