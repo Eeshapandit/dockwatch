@@ -185,6 +185,18 @@ section{padding-block:76px}
 .stack{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
 .chip{font:500 .8rem/1 var(--f-mono);padding:8px 11px;border-radius:999px;border:1px solid var(--line);background:var(--surface)}
 
+/* ---------- About ---------- */
+.about{display:grid;grid-template-columns:auto minmax(0,1fr);gap:32px;align-items:start;background:var(--surface);border:1px solid var(--line);border-radius:24px;padding:36px}
+.avatar{width:96px;height:96px;border-radius:50%;background:var(--lane);color:var(--on-lane);display:grid;place-items:center;font:800 2rem/1 var(--f-display);letter-spacing:-.02em;position:relative}
+.avatar svg{position:absolute;right:-10px;bottom:-4px;width:46px;height:30px;color:var(--lane);background:var(--surface);border-radius:999px;padding:4px}
+.about h2{font-size:clamp(1.8rem,3.6vw,2.6rem)}
+.about-body{display:grid;gap:14px;max-width:62ch}
+.about-body p{color:var(--muted)}
+.about-body p b{color:var(--ink);font-weight:600}
+.creds{display:flex;flex-wrap:wrap;gap:8px}
+.links{display:flex;flex-wrap:wrap;gap:10px;margin-top:6px}
+.byline-link{color:inherit;text-decoration:none;border-bottom:1.5px solid var(--lane)}
+@media (max-width:620px){.about{grid-template-columns:1fr;padding:26px}}
 footer{border-top:1px solid var(--line);padding-block:32px 48px;color:var(--muted);font-size:.88rem;display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px}
 
 @media (max-width:960px){
@@ -222,7 +234,7 @@ footer{border-top:1px solid var(--line);padding-block:32px 48px;color:var(--mute
       <div class="brand"><svg aria-hidden="true"><use href="#bike"/></svg>dockwatch</div>
       <div class="eyebrow">An end to end data pipeline on NYC bike share</div>
       <h1 style="margin-top:14px">Where did all the <em>bikes</em> go?</h1>
-      <p class="lede">Every minute I stream the status of <b>every bike share station in NYC and Jersey City</b>, load every ride from the monthly trip files, and model where bikes pile up and where they run out.</p>
+      <p class="lede">A project by <a class="byline-link" href="https://eeshapanditt11.netlify.app" target="_blank" rel="noopener">Eesha Pandit</a>. Every minute I stream the status of <b>every bike share station in NYC and Jersey City</b>, load every ride from the monthly trip files, and model where bikes pile up and where they run out.</p>
       <div class="cta">
         <a class="btn primary" href="https://github.com/Eeshapandit/dockwatch" target="_blank" rel="noopener">
           <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.78 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.7 5.4-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/></svg>
@@ -400,11 +412,32 @@ footer{border-top:1px solid var(--line);padding-block:32px 48px;color:var(--mute
       <div class="cmds" id="cmds"></div>
     </div>
   </section>
+  <section id="about">
+    <div class="about">
+      <div class="avatar" aria-hidden="true">EP<svg viewBox="0 0 64 40"><use href="#bike"/></svg></div>
+      <div class="about-body">
+        <span class="eyebrow">About me</span>
+        <h2>Hi, I'm Eesha</h2>
+        <p>I'm a <b>Data and AI Engineer at Adjmi Apparel Group</b> in New York, where I build ERP data pipelines, look after our data warehouse and turn it all into Power BI reporting for the whole company.</p>
+        <p>I built dockwatch to go deeper on the modern open source stack: streaming with Kafka, orchestration with Airflow, modeling and testing with dbt. I commute into Manhattan every day, so the rush hour pattern in this data felt personal.</p>
+        <div class="creds">
+          <span class="chip">M.S. Information Technology &amp; Analytics, Rutgers Business School</span>
+          <span class="chip">Microsoft Certified: Power BI Data Analyst</span>
+          <span class="chip">Published ML research, IRJET</span>
+        </div>
+        <div class="links">
+          <a class="btn primary" href="https://eeshapanditt11.netlify.app" target="_blank" rel="noopener">See my portfolio</a>
+          <a class="btn" href="https://www.linkedin.com/in/eesha-pandit-ba61751b9" target="_blank" rel="noopener">LinkedIn</a>
+          <a class="btn" href="https://github.com/Eeshapandit" target="_blank" rel="noopener">GitHub</a>
+        </div>
+      </div>
+    </div>
+  </section>
 </div>
 
 <div class="wrap">
   <footer>
-    <span>Built by <a href="https://www.linkedin.com/in/eesha-pandit-ba61751b9" target="_blank" rel="noopener">Eesha Pandit</a></span>
+    <span>Built by <a href="https://eeshapanditt11.netlify.app" target="_blank" rel="noopener">Eesha Pandit</a> · <a href="https://www.linkedin.com/in/eesha-pandit-ba61751b9" target="_blank" rel="noopener">LinkedIn</a> · <a href="https://github.com/Eeshapandit/dockwatch" target="_blank" rel="noopener">Code</a></span>
     <span id="credits">Live data from the public GBFS feed, rides from the public System Data trip files. Map: NYC borough boundaries (NYC Open Data) and Census ZIP areas for New Jersey. Independent project, not affiliated with any bike share operator.</span>
   </footer>
 </div>

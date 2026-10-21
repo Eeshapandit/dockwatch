@@ -104,4 +104,4 @@ Live station status from the public GBFS feed. Rides from the public Citi Bike S
 
 ---
 
-Built by [Eesha Pandit](https://www.linkedin.com/in/eesha-pandit-ba61751b9)
+Built by [Eesha Pandit](https://eeshapanditt11.netlify.app) · [LinkedIn](https://www.linkedin.com/in/eesha-pandit-ba61751b9)
