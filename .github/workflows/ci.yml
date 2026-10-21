@@ -1,0 +1,44 @@
+# Step 14: every push is tested automatically.
+#   1. unit tests (cleaning, change detection, both trip file schemas)
+#   2. load a small known dataset into a throwaway Postgres
+#   3. dbt build: every model is built and every data test must pass
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  pipeline:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: dockwatch
+          POSTGRES_PASSWORD: dockwatch
+          POSTGRES_DB: dockwatch
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U dockwatch" --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      PG_DSN: postgresql://dockwatch:dockwatch@localhost:5432/dockwatch
+      DBT_HOST: localhost
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install
+        run: pip install -r requirements.txt dbt-core==1.12.6 dbt-postgres==1.11.0
+      - name: Seed test data
+        run: python tests/seed_ci.py
+      - name: Unit tests
+        run: python -m pytest -q tests
+      - name: dbt build (models + data tests)
+        working-directory: dbt
+        run: dbt build --profiles-dir .
+      - name: Export page data (smoke test)
+        run: python export_page_data.py && rm docs/data.json

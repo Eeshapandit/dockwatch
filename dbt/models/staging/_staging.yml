@@ -1,0 +1,22 @@
+version: 2
+
+models:
+  - name: stg_station_status
+    columns:
+      - name: station_id
+        data_tests: [not_null]
+      - name: last_reported
+        data_tests: [not_null]
+  - name: stg_station_information
+    columns:
+      - name: station_id
+        data_tests: [unique, not_null]
+  - name: stg_trips
+    columns:
+      - name: ride_id
+        data_tests: [unique, not_null]
+      - name: member_casual
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["member", "casual"]

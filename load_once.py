@@ -12,7 +12,7 @@ ROOT = "https://gbfs.citibikenyc.com/gbfs/gbfs.json"
 
 # Connection string format: postgresql://USER:PASSWORD@HOST:PORT/DATABASE
 # These match docker-compose.yml.
-DSN = "postgresql://dockwatch:dockwatch@localhost:5432/dockwatch"
+from db import DSN  # localhost on your terminal, "postgres" inside Docker
 
 # %(name)s placeholders get filled from each row dict by name.
 # Never build SQL with f-strings: placeholders stop SQL injection and

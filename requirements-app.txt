@@ -1,0 +1,11 @@
+# Everything the Docker image needs (Python 3.12 inside the container).
+requests==2.32.3
+psycopg[binary]==3.3.6
+confluent-kafka==2.16.0
+pyarrow==26.0.0
+pandas==3.0.6
+dbt-core==1.12.6
+dbt-postgres==1.11.0
+streamlit==1.66.1
+pydeck==0.9.3
+altair==6.3.0

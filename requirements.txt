@@ -1,2 +1,6 @@
+# For running scripts and tests on your Codespace terminal.
 requests==2.32.3
 psycopg[binary]==3.3.6
+pyarrow==26.0.0
+pandas==3.0.6
+pytest==9.1.1

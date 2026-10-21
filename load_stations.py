@@ -9,7 +9,7 @@ import requests
 from gbfs import clean_info_feed
 
 ROOT = "https://gbfs.citibikenyc.com/gbfs/gbfs.json"
-DSN = "postgresql://dockwatch:dockwatch@localhost:5432/dockwatch"
+from db import DSN  # localhost on your terminal, "postgres" inside Docker
 
 # UPSERT = UPdate or inSERT.
 #   * new station_id         -> plain insert

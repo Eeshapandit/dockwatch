@@ -1,4 +1,4 @@
-"""Step 4: poll the live feed every 60 seconds and save changes, forever.
+"""Steps 4 + 6: poll the live feed every 60 seconds and save REAL changes, forever.
 
 Run in foreground:  python poller.py            (Ctrl+C to stop)
 Run in background:  nohup python poller.py > poller.log 2>&1 &
@@ -9,10 +9,10 @@ import time
 import psycopg
 import requests
 
-from gbfs import clean_status_feed
+from gbfs import STATE_FIELDS, changed_rows, clean_status_feed, remember
 
 ROOT = "https://gbfs.citibikenyc.com/gbfs/gbfs.json"
-DSN = "postgresql://dockwatch:dockwatch@localhost:5432/dockwatch"
+from db import DSN  # localhost on your terminal, "postgres" inside Docker
 POLL_SECONDS = 60  # GBFS refreshes about once a minute; polling faster just wastes calls
 
 INSERT_SQL = """
@@ -46,11 +46,29 @@ def get_status_url(session):
     return feeds["station_status"]
 
 
-def poll_once(session, conn, status_url):
+LATEST_STATE_SQL = f"""
+select distinct on (station_id) station_id, {", ".join(STATE_FIELDS)}
+from raw.station_status
+order by station_id, last_reported desc
+"""
+# DISTINCT ON keeps the first row per station_id; ordering by last_reported desc
+# makes that first row the newest one. A Postgres favourite for "latest per group".
+
+
+def load_last_state(conn):
+    """Step 6: on startup, rebuild what we last stored for every station,
+    so a restart doesn't re-insert 2,500 unchanged rows."""
+    with conn.cursor() as cur:
+        cur.execute(LATEST_STATE_SQL)
+        return {row[0]: tuple(row[1:]) for row in cur.fetchall()}
+
+
+def poll_once(session, conn, status_url, last_state):
     """One cycle of Extract -> Transform -> Load. Returns (fetched, inserted)."""
     resp = session.get(status_url, timeout=15)
     resp.raise_for_status()  # turn HTTP errors (500, 503...) into exceptions
-    rows = clean_status_feed(resp.json())
+    fetched = clean_status_feed(resp.json())
+    rows = changed_rows(fetched, last_state)  # Step 6: drop heartbeats
 
     with conn.transaction():  # all rows of this cycle commit together, or none
         with conn.cursor() as cur:
@@ -59,7 +77,8 @@ def poll_once(session, conn, status_url):
             cur.executemany(INSERT_SQL, rows)
             cur.execute("select count(*) from raw.station_status")
             after = cur.fetchone()[0]
-    return len(rows), after - before
+    remember(rows, last_state)  # only after the transaction committed
+    return len(fetched), after - before
 
 
 def main():
@@ -70,14 +89,16 @@ def main():
 
     # One DB connection for the whole run, instead of reconnecting every minute.
     with psycopg.connect(DSN, autocommit=True) as conn:
+        last_state = load_last_state(conn)
+        log.info("loaded last known state for %d stations", len(last_state))
         cycle = 0
         while True:  # a poller runs until someone stops it
             cycle += 1
             started = time.monotonic()  # monotonic = a clock that never jumps
 
             try:
-                fetched, inserted = poll_once(session, conn, status_url)
-                log.info("cycle %d: fetched %d, inserted %d changed", cycle, fetched, inserted)
+                fetched, inserted = poll_once(session, conn, status_url, last_state)
+                log.info("cycle %d: fetched %d, %d really changed", cycle, fetched, inserted)
             except requests.RequestException as e:
                 # Network blip or Citi Bike outage: log it and try again next cycle.
                 # Crashing here would stop the whole pipeline for one bad minute.

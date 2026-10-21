@@ -1,94 +1,106 @@
 # dockwatch 🚲
 
-**Which Citi Bike stations run empty or full, and when?**
+**Where did all the bikes go?** An end to end data pipeline on NYC bike share data: a **streaming lane** for live dock status, a **batch lane** for monthly ride history, and **dbt** turning both into tested answers.
 
-An end to end data pipeline on live NYC + Jersey City bike share data, built in public, step by step.
-Every station in the system is polled every minute, cleaned, stored, and turned into answers about the rebalancing problem.
+🌐 **Project page:** [eeshapandit.github.io/dockwatch](https://eeshapandit.github.io/dockwatch) &nbsp;·&nbsp; ✅ CI on every push
 
-> 🚧 **Work in progress.** I'm building this one concept at a time to learn modern data engineering properly. Follow along in the [build log](#build-log).
-
-## What it does today
+## Architecture
 
 ```mermaid
 flowchart LR
-    A[Citi Bike GBFS API<br/>2,500+ stations] -->|every 60s| B[poller.py<br/>extract + clean]
-    B -->|idempotent insert| C[(Postgres<br/>raw.station_status)]
-    A -->|upsert| D[(Postgres<br/>raw.station_information)]
-    C --> E[SQL: minutes empty<br/>per station]
-    D --> E
+    subgraph Streaming["Streaming · every 60s"]
+        A[GBFS live feed] --> B[producer.py<br/>real changes only]
+        B --> C[(Redpanda<br/>Kafka topics)]
+        C --> D[consumer.py<br/>exactly once in effect]
+    end
+    subgraph Batch["Batch · monthly · Airflow"]
+        E[Trip files<br/>monthly zip] --> F[trips.py extract<br/>2 schemas → 1]
+        F --> G[Parquet]
+        G --> H[trips.py load<br/>atomic month replace]
+    end
+    D --> P[(Postgres<br/>raw)]
+    H --> P
+    P --> T[dbt<br/>staging → intermediate → marts<br/>20 data tests]
+    T --> S[Streamlit dashboard]
+    T --> W[Project page<br/>docs/data.json]
 ```
 
-## First finding
+| Layer | Tool | What it does |
+|---|---|---|
+| Ingest, streaming | Python, confluent-kafka, **Redpanda** | Polls 2,500+ stations every minute, publishes only real state changes |
+| Ingest, batch | Python, **Parquet** (pyarrow) | Finds, downloads and normalizes a month of rides (millions of rows) |
+| Storage | **PostgreSQL** 16 | Raw landing layer, idempotent writes everywhere |
+| Orchestration | **Airflow** 2.10 | Monthly DAG: extract → load → dbt build → export, with retries |
+| Transformation | **dbt** 1.12 | 11 models, 20 data tests |
+| Serving | **Streamlit** + pydeck, static page | Live empties map, trip flow arcs, per station history |
+| Quality | pytest, **GitHub Actions** | Unit tests + full dbt build on a throwaway database, every push |
+| Infra | **Docker** Compose | One command runs everything, in Codespaces too |
 
-At noon on a Wednesday, **171 stations were empty**, up from 151 forty minutes earlier.
-The stations empty the longest were all in residential neighborhoods far from Midtown:
-Jackson Heights and Sunnyside in Queens, the Bronx, Washington Heights, East New York.
+## Findings
 
-Morning commuters ride into Manhattan and dock there, so bikes drain out of the outer boroughs and don't come back until evening. That's the rebalancing problem Citi Bike solves with vans and crews.
+**Live stream, Wednesday Oct 21, noon:** 171 stations had zero bikes, up from 151 forty minutes earlier. The ones empty the longest were all residential: Jackson Heights and Sunnyside in Queens, the Bronx, Washington Heights, East New York. Commuters ride into Manhattan in the morning, dock there, and the bikes don't come back until evening.
 
-## Design decisions
-
-| Decision | Why |
-|---|---|
-| **Grain:** one row per station per report | Lets us rebuild any station's full timeline |
-| **Composite key** `(station_id, last_reported)` | Makes every load **idempotent**: rerunning never creates duplicates |
-| `station_id` stored as `text` | The same feed sends both UUIDs and long numeric IDs |
-| Filter on `is_installed`, not on dates | 54 uninstalled stations report a fake 1970 timestamp. Fix the cause, not the symptom |
-| **Facts vs dimensions** | Status changes every minute (append), names and capacity rarely change (upsert) |
-| `timestamptz`, stored in UTC | Servers run on UTC, convert to New York time only at display |
-| One transaction per poll cycle | A crash saves nothing partial; the next cycle catches up safely |
-| `LEAD()` window function | Turns point in time snapshots into **durations** (how long was it empty?) |
-
-## Build log
-
-| Step | What I built | What I learned | Status |
-|---|---|---|---|
-| 1 | Explore the GBFS feed | Look at the source before designing anything | ✅ |
-| 2 | Cleaning functions + table design | Grain, keys, types, dirty data | ✅ |
-| 3 | Postgres in Docker + first load | Docker, volumes, ETL, transactions, idempotency | ✅ |
-| 4 | Poller that runs every minute | Logging, error handling, drift free scheduling | ✅ |
-| 5 | Station names dimension | Upserts, facts vs dimensions, joins | ✅ |
-| 6 | Store only real changes | Duplicate vs redundant data | ⏳ next |
-| 7 to 8 | Redpanda (Kafka) producer + consumer | Streaming, offsets, delivery guarantees | ⬜ |
-| 9 to 10 | Monthly trip history to Parquet | Batch ingestion, backfills | ⬜ |
-| 11 | Airflow DAG | Orchestration | ⬜ |
-| 12 | dbt models + tests | Transformation, data quality | ⬜ |
-| 13 | Streamlit dashboard | Serving | ⬜ |
-| 14 | CI with GitHub Actions | Shipping | ⬜ |
+**Trip history:** the project page replays an average weekday hour by hour from every ride in the latest month. Red stations lose bikes, green stations gain them, orange lines are the busiest routes.
 
 ## Run it
 
-Works in GitHub Codespaces (nothing to install locally) or anywhere with Python 3 and Docker.
+Works in GitHub Codespaces (nothing to install locally) or anywhere with Docker.
 
 ```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-
-docker compose up -d            # start Postgres, creates the raw tables
-python load_stations.py         # load station names
-python poller.py                # poll every 60s (Ctrl+C to stop)
+make showcase        # everything: stations, live stream, latest month of rides, dbt, page data
 ```
 
-Then ask a question:
+Or piece by piece:
 
 ```bash
-docker exec -i dockwatch-db psql -U dockwatch -d dockwatch < sql/queries/empty_minutes_named.sql
+make up              # Postgres
+make stations        # station names and locations
+make streaming       # Redpanda + producer + consumer   (console: port 8080)
+make trips MONTH=202509   # one month of rides            (or MONTH=latest)
+make dbt             # build + test every model
+make dashboard       # Streamlit                         (port 8501)
+make airflow         # Airflow UI, admin / admin         (port 8081)
+make export          # refresh docs/data.json for the project page
+make test            # unit tests
+make down            # stop everything, data is kept
 ```
+
+## Design decisions
+
+| Problem | Decision |
+|---|---|
+| Rerunning any load | **Idempotent everywhere**: composite key `(station_id, last_reported)` + `on conflict`, months replaced atomically |
+| 54 stations report a 1970 timestamp | Traced to `is_installed = false` and filtered on the **cause**, with a dbt test as a safety net |
+| 1,700 rows a minute from heartbeats | **Duplicate ≠ redundant**: compare each station's state, publish only real changes |
+| Consumer crashes mid batch | Commit Kafka offsets **after** the DB transaction. At least once + idempotent sink = exactly once in effect |
+| Pre 2021 files have other columns and no ride id | Normalize both schemas at the edge; build a stable hash id for old rides |
+| Trip files and live feed use different station ids | Trip ids match GBFS `short_name`; trip station locations come from the **median** of ride coordinates |
+| Snapshots don't say "how long" | `LEAD()` turns rows into state **spells**, split at hour boundaries for minutes empty per hour |
+| Laptop sleeps, pipeline pauses | Open spells end where the data ends and are capped at 12 hours, so outages can't invent empty time |
+| Airflow and dbt dependency clashes | dbt runs in its **own virtualenv** inside the Airflow image |
 
 ## Repo map
 
-| File | Purpose |
+| Path | Purpose |
 |---|---|
-| `gbfs.py` | Pure cleaning functions shared by every script |
-| `poller.py` | The continuous pipeline: extract, clean, load every 60s |
-| `load_stations.py` | Upserts station names, locations and capacity |
-| `sql/00*_raw_*.sql` | Table definitions, applied on first database start |
-| `sql/queries/` | Analysis queries |
-| `explore.py`, `step2.py`, `load_once.py` | Learning scripts from earlier steps, kept to show the progression |
+| `gbfs.py` | Pure cleaning + change detection, shared by every live path |
+| `producer.py`, `consumer.py` | Streaming lane (Steps 7, 8) |
+| `trips.py` | Batch lane: discover, download, normalize to Parquet, load a month (Steps 9, 10) |
+| `airflow/dags/` | Monthly DAG (Step 11) |
+| `dbt/` | Models and tests (Step 12) |
+| `dashboard/app.py` | Streamlit dashboard (Step 13) |
+| `.github/workflows/ci.yml` | CI (Step 14) |
+| `export_page_data.py`, `docs/` | Project page and its data |
+| `sql/` | Raw table definitions and ad hoc queries |
+| `poller.py`, `load_stations.py`, `explore.py`, `step2.py`, `load_once.py` | Earlier steps, kept to show the progression |
+
+## Build log
+
+1. Explore the live feed · 2. Clean rows + table design · 3. Postgres in Docker · 4. Poll every minute · 5. Station names (upserts) · 6. Only real changes · 7. Redpanda producer · 8. Consumer · 9. Trip files to Parquet · 10. Monthly loads · 11. Airflow + dbt · 12. Dashboard + CI
 
 ## Data
 
-Live data from the public [Citi Bike GBFS feed](https://citibikenyc.com/system-data). Not affiliated with Citi Bike or Lyft.
+Live station status from the public GBFS feed. Rides from the public Citi Bike System Data trip files. Map geometry from NYC Open Data borough boundaries and Census ZIP areas for New Jersey. Independent project, not affiliated with Citi Bike or Lyft.
 
 ---
 

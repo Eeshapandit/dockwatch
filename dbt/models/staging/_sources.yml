@@ -1,0 +1,13 @@
+version: 2
+
+sources:
+  - name: raw
+    schema: raw
+    description: Landing tables written by the poller, the Kafka consumer and trips.py.
+    tables:
+      - name: station_status
+        description: One row per station per real change in state (Step 6).
+      - name: station_information
+        description: One row per station, upserted (Step 5).
+      - name: trips
+        description: One row per ride, loaded one month at a time (Step 10).

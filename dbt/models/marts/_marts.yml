@@ -1,0 +1,30 @@
+version: 2
+
+models:
+  - name: station_latest
+    description: Current state of every station.
+    columns:
+      - name: station_id
+        data_tests: [unique, not_null]
+  - name: fct_station_hourly_availability
+    description: Minutes empty and full per station per New York hour.
+    columns:
+      - name: station_hour_key
+        data_tests: [unique, not_null]
+  - name: mart_empty_leaderboard
+    columns:
+      - name: station_id
+        data_tests: [unique, not_null]
+  - name: mart_station_net_flow
+    description: Weekday departures, arrivals and net flow per trip station per hour.
+    columns:
+      - name: trip_station_id
+        data_tests: [not_null]
+  - name: mart_trip_flows
+    columns:
+      - name: trips
+        data_tests: [not_null]
+  - name: mart_hourly_trips
+    columns:
+      - name: hour
+        data_tests: [unique, not_null]

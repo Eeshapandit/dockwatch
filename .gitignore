@@ -3,3 +3,7 @@ __pycache__/
 *.pyc
 .env
 poller.log
+data/
+dbt/target/
+dbt/logs/
+.pytest_cache/

@@ -58,3 +58,43 @@ def clean_station_info(s):
 def clean_info_feed(payload):
     """Whole station_information payload -> list of clean rows."""
     return [clean_station_info(s) for s in payload["data"]["stations"]]
+
+
+# ---------------------------------------------------------------------------
+# Step 6: store only REAL changes
+#
+# Stations send a heartbeat about every minute, so last_reported moves even
+# when nothing happened. Our key (station_id, last_reported) stops DUPLICATE
+# rows, but not REDUNDANT ones. Fix: remember each station's last known state
+# and only keep a row when the state itself is different.
+# ---------------------------------------------------------------------------
+
+STATE_FIELDS = (
+    "num_bikes_available",
+    "num_ebikes_available",
+    "num_bikes_disabled",
+    "num_docks_available",
+    "num_docks_disabled",
+    "is_renting",
+    "is_returning",
+)
+
+
+def state_of(row):
+    """The part of a row that matters. last_reported is deliberately NOT in it."""
+    return tuple(row[f] for f in STATE_FIELDS)
+
+
+def changed_rows(rows, last_state):
+    """Rows whose state differs from last_state[station_id]. Does not modify last_state.
+
+    New stations (not in last_state yet) always count as changed.
+    """
+    return [r for r in rows if last_state.get(r["station_id"]) != state_of(r)]
+
+
+def remember(rows, last_state):
+    """Record rows as the latest known state. Call only AFTER they are safely stored,
+    so a failed write never makes us forget a change."""
+    for r in rows:
+        last_state[r["station_id"]] = state_of(r)

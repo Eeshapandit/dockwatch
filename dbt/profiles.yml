@@ -1,0 +1,14 @@
+# Connection settings. env_var() lets the same file work on your terminal
+# (localhost), inside Docker (postgres) and in CI.
+dockwatch:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: "{{ env_var('DBT_HOST', 'localhost') }}"
+      port: 5432
+      user: "{{ env_var('DBT_USER', 'dockwatch') }}"
+      password: "{{ env_var('DBT_PASSWORD', 'dockwatch') }}"
+      dbname: dockwatch
+      schema: analytics
+      threads: 4

@@ -1,0 +1,642 @@
+<title>dockwatch</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: a city street by day, a night map for the flows. Paper sidewalk sections, a painted bike lane strip,
+   one dark "night city" map where trips flow, and the build log drawn as a bike route with stops. */
+:root{
+  --paper:#F2F5F0; --surface:#FFFFFF; --ink:#15241C; --muted:#5B6B62; --line:#D5DED7;
+  --lane:#2E8B57; --lane-soft:#DCEFE3; --empty:#C9771A; --empty-soft:#FBEBD3;
+  --asphalt:#2B3430; --paint:#F6F8F6; --on-lane:#FFFFFF;
+  /* the night map is one fixed look in both themes */
+  --night:#0C1311; --night-land:#18221E; --night-edge:#26332C; --night-ink:#E8EFEA; --night-muted:#8FA096;
+  --route:#F2A341; --spark:#FFD58A; --lose:#F0563E; --gain:#3CCB7F;
+  --f-display:"Bricolage Grotesque","Avenir Next","Segoe UI",sans-serif;
+  --f-body:"Figtree","Segoe UI",system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#0F1512; --surface:#16201B; --ink:#E6EEE8; --muted:#94A49B; --line:#26332C;
+  --lane:#4CC285; --lane-soft:#183022; --empty:#F0A541; --empty-soft:#3A2A12;
+  --asphalt:#1E2622; --paint:#DCE4DF; --on-lane:#0F1512; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#0F1512; --surface:#16201B; --ink:#E6EEE8; --muted:#94A49B; --line:#26332C;
+  --lane:#4CC285; --lane-soft:#183022; --empty:#F0A541; --empty-soft:#3A2A12;
+  --asphalt:#1E2622; --paint:#DCE4DF; --on-lane:#0F1512; color-scheme:dark}
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--paper);color:var(--ink);font:400 17px/1.6 var(--f-body);-webkit-font-smoothing:antialiased}
+.wrap{max-width:1160px;margin:0 auto;padding-left:max(20px,env(safe-area-inset-left,0px));padding-right:max(20px,env(safe-area-inset-right,0px))}
+h1,h2,h3{font-family:var(--f-display);margin:0;line-height:1.02;text-wrap:balance;letter-spacing:-.02em}
+h2{font-size:clamp(2rem,4.6vw,3.2rem);font-weight:800}
+h3{font-size:1.15rem;font-weight:700;letter-spacing:-.01em}
+p{margin:0}
+a{color:var(--lane)}
+button{font:inherit}
+:focus-visible{outline:2.5px solid var(--lane);outline-offset:3px;border-radius:4px}
+.eyebrow{font:600 .74rem/1 var(--f-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--lane)}
+.muted{color:var(--muted)}
+section{padding-block:76px}
+.sec-head{display:grid;gap:12px;margin-bottom:36px;max-width:700px}
+.sec-head p{color:var(--muted);font-size:1.08rem}
+
+/* ---------- Hero ---------- */
+.hero{display:grid;grid-template-columns:1.1fr .9fr;gap:56px;align-items:center;padding-block:64px 44px}
+.hero > *{min-width:0}
+.brand{display:flex;align-items:center;gap:10px;font:800 1.15rem/1 var(--f-display);margin-bottom:28px}
+.brand svg{width:34px;height:22px;color:var(--lane)}
+.hero h1{font-size:clamp(3rem,8vw,5.6rem);font-weight:800;letter-spacing:-.035em}
+.hero h1 em{font-style:normal;color:var(--lane)}
+.lede{font-size:1.2rem;margin-top:22px;max-width:38ch;color:var(--muted)}
+.lede b{color:var(--ink);font-weight:600}
+.cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:30px}
+.btn{display:inline-flex;align-items:center;gap:8px;font:600 .95rem/1 var(--f-body);padding:13px 18px;border-radius:999px;text-decoration:none;border:1.5px solid var(--ink);color:var(--ink);background:transparent;cursor:pointer}
+.btn.primary{background:var(--lane);border-color:var(--lane);color:var(--on-lane)}
+.btn svg{width:18px;height:18px}
+
+.dock{background:var(--surface);border:1px solid var(--line);border-radius:22px;padding:26px;box-shadow:0 30px 60px -40px rgba(20,40,30,.35)}
+.dock-top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.dock-name{font:700 1.15rem/1.2 var(--f-display)}
+.dock-sub{font:500 .72rem/1.4 var(--f-mono);color:var(--muted);margin-top:4px}
+.clock{font:600 1.5rem/1 var(--f-mono);font-variant-numeric:tabular-nums}
+.rack{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin:22px 0 18px}
+.slot{aspect-ratio:1.5/1;border-radius:10px;border:1.5px dashed var(--line);display:grid;place-items:center;transition:background .5s,border-color .5s}
+.slot svg{width:78%;color:var(--lane);transition:opacity .5s,transform .5s}
+.slot.gone{border-color:var(--empty);background:var(--empty-soft)}
+.slot.gone svg{opacity:0;transform:translateX(30%)}
+.meter{display:flex;justify-content:space-between;align-items:baseline;gap:12px;border-top:1px solid var(--line);padding-top:14px}
+.meter b{font:800 2.4rem/1 var(--f-display);font-variant-numeric:tabular-nums}
+.pill{font:600 .72rem/1 var(--f-mono);letter-spacing:.08em;padding:7px 10px;border-radius:999px;background:var(--lane-soft);color:var(--lane);transition:background .4s,color .4s}
+.pill.empty{background:var(--empty-soft);color:var(--empty)}
+.illus{font-size:.78rem;color:var(--muted);margin-top:12px}
+
+.stats{display:grid;grid-template-columns:repeat(4,1fr);border-block:1px solid var(--line)}
+.stat{padding:20px 18px;border-right:1px solid var(--line);min-width:0}
+.stat:last-child{border-right:none}
+.stat b{display:block;font:800 clamp(1.6rem,3.4vw,2.3rem)/1 var(--f-display);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.stat span{font-size:.88rem;color:var(--muted)}
+
+/* ---------- Street strip ---------- */
+.street{position:relative;height:110px;background:var(--asphalt);overflow:hidden;margin-top:56px}
+.lane{position:absolute;left:0;right:0;top:28px;height:54px;background:var(--lane);opacity:.92}
+.lane::before,.lane::after{content:"";position:absolute;left:0;right:0;height:3px;background:repeating-linear-gradient(90deg,var(--paint) 0 34px,transparent 34px 56px)}
+.lane::before{top:-8px}.lane::after{bottom:-8px}
+.stencils{position:absolute;inset:28px 0 auto;height:54px;display:flex;gap:220px;padding-left:80px;color:var(--paint);opacity:.55}
+.stencils svg{width:58px;flex:none;margin-top:9px}
+.rider{position:absolute;top:22px;left:0;width:96px;color:var(--paint);animation:ride 11s linear infinite}
+.rider .spin{transform-box:fill-box;transform-origin:center;animation:spin .7s linear infinite}
+@keyframes ride{from{transform:translateX(-120px)}to{transform:translateX(calc(100vw + 40px))}}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ---------- Night flow map ---------- */
+.flowsec{background:var(--night);color:var(--night-ink)}
+.flowsec .eyebrow{color:var(--gain)}
+.flowsec .sec-head p{color:var(--night-muted)}
+.flowgrid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,.75fr);gap:36px;align-items:start}
+.mapbox{position:relative;border-radius:22px;overflow:hidden;background:var(--night);border:1px solid var(--night-edge);max-width:100%}
+.mapbox svg,.mapbox canvas{display:block;width:100%;height:auto}
+.mapbox canvas{position:absolute;inset:0;width:100%;height:100%}
+.basemap .nj,.basemap .boro{fill:var(--night-land);stroke:var(--night-edge);stroke-width:1.2}
+.basemap .lbl{font:700 15px var(--f-display);fill:var(--night-muted);letter-spacing:.16em;text-transform:uppercase;opacity:.7}
+.maphour{position:absolute;left:18px;top:14px;font:800 clamp(1.8rem,4vw,2.8rem)/1 var(--f-display);color:var(--night-ink);text-shadow:0 2px 18px var(--night);font-variant-numeric:tabular-nums;pointer-events:none}
+.maphour small{display:block;font:500 .72rem/1.6 var(--f-mono);letter-spacing:.12em;color:var(--night-muted);text-transform:uppercase}
+.side{display:grid;gap:22px;min-width:0}
+.controls{display:flex;align-items:center;gap:12px}
+.play{width:46px;height:46px;border-radius:50%;border:none;background:var(--gain);color:var(--night);display:grid;place-items:center;cursor:pointer;flex:none}
+.play svg{width:18px;height:18px}
+.range{flex:1;min-width:0;accent-color:var(--gain)}
+.bars{display:grid;grid-template-columns:repeat(24,1fr);align-items:end;gap:3px;height:92px}
+.bars button{border:none;padding:0;background:var(--night-edge);border-radius:3px 3px 0 0;cursor:pointer;min-height:3px;transition:background .25s}
+.bars button.on{background:var(--route)}
+.bars-axis{display:flex;justify-content:space-between;font:500 .7rem/1 var(--f-mono);color:var(--night-muted);margin-top:6px}
+.legend{display:grid;gap:9px;font-size:.9rem;color:var(--night-muted)}
+.legend span{display:flex;align-items:center;gap:10px}
+.legend i{width:12px;height:12px;border-radius:50%;flex:none}
+.legend i.line{height:3px;border-radius:2px;width:22px}
+.movers{display:grid;gap:10px;border-top:1px solid var(--night-edge);padding-top:18px}
+.mover{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;font-size:.92rem}
+.mover .tag{font:600 .66rem/1 var(--f-mono);letter-spacing:.08em;padding:5px 7px;border-radius:999px}
+.mover .tag.l{background:rgba(240,86,62,.16);color:var(--lose)}
+.mover .tag.g{background:rgba(60,203,127,.16);color:var(--gain)}
+.mover b{font:600 .85rem/1 var(--f-mono);font-variant-numeric:tabular-nums}
+.mover span{overflow-wrap:anywhere}
+.note{font-size:.8rem;color:var(--night-muted)}
+
+/* ---------- Finding ---------- */
+.finding{display:grid;grid-template-columns:.9fr 1.1fr;gap:48px;align-items:start}
+.finding > *{min-width:0}
+.bignum{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap}
+.bignum b{font:800 clamp(4rem,10vw,6.5rem)/.85 var(--f-display);color:var(--empty);letter-spacing:-.04em;font-variant-numeric:tabular-nums}
+.bignum span{font-size:1rem;color:var(--muted);max-width:18ch;padding-bottom:6px}
+.trend{display:flex;flex-wrap:wrap;align-items:center;gap:10px;font:600 .9rem/1 var(--f-mono);color:var(--muted);margin-top:18px}
+.trend .arrow{color:var(--empty)}
+.story{display:grid;gap:18px}
+.story p{max-width:46ch}
+.groups{display:grid;grid-template-columns:1fr 1fr;gap:22px 32px}
+.group h3{font-size:.98rem;display:flex;justify-content:space-between;gap:8px;align-items:baseline;border-bottom:1px solid var(--line);padding-bottom:8px;margin-bottom:6px}
+.group h3 span{font:500 .72rem/1 var(--f-mono);color:var(--muted);letter-spacing:.04em;white-space:nowrap}
+.st{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:5px 0}
+.st-name{font-weight:500;font-size:.92rem;overflow-wrap:anywhere}
+.docks{display:flex;gap:2px;align-items:center}
+.docks i{width:4px;height:11px;border-radius:2px;border:1.2px solid var(--empty);opacity:.85}
+.docks em{font:500 .7rem/1 var(--f-mono);color:var(--muted);font-style:normal;margin-left:6px;min-width:3.4em;text-align:right;font-variant-numeric:tabular-nums}
+.footnote{font-size:.82rem;color:var(--muted);margin-top:4px;max-width:60ch}
+
+/* ---------- Pipeline ---------- */
+.pipe-scroll{overflow-x:auto;padding-bottom:6px}
+.pipe{display:block;min-width:900px;width:100%;height:auto}
+.pipe text{font-family:var(--f-body);fill:var(--ink)}
+.pipe .sub{fill:var(--muted);font-family:var(--f-mono)}
+.pipe .node{fill:var(--surface);stroke:var(--lane);stroke-width:1.8}
+.pipe .store{fill:var(--lane-soft);stroke:var(--lane);stroke-width:1.8}
+.pipe .edge{fill:none;stroke:var(--line);stroke-width:3}
+.pipe .dot{fill:var(--lane)}
+.pipe .dot.b{fill:var(--empty)}
+.pipe .lanelbl{font:600 11px var(--f-mono);letter-spacing:.12em;fill:var(--muted)}
+
+/* ---------- Decisions ---------- */
+.decisions{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:18px;overflow:hidden}
+.dec{background:var(--surface);padding:24px;display:grid;gap:12px;align-content:start;min-width:0}
+.dec .q{font:600 .7rem/1.3 var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--empty)}
+.dec p{color:var(--muted);font-size:.95rem}
+.dec code{font-family:var(--f-mono);font-size:.85em;background:var(--lane-soft);color:var(--ink);padding:1px 6px;border-radius:5px;overflow-wrap:anywhere}
+
+/* ---------- Route ---------- */
+.route{list-style:none;margin:0;padding:0;position:relative;display:grid;grid-template-columns:1fr 1fr;gap:0 48px}
+.stop{display:grid;grid-template-columns:36px minmax(0,1fr);gap:16px;align-items:start;padding:12px 0;position:relative}
+.stop::before{content:"";position:absolute;left:15px;top:0;bottom:0;width:6px;background:var(--lane);opacity:.35}
+.route li:first-child::before,.route li:nth-child(7)::before{top:24px}
+.route li:nth-child(6)::before,.route li:last-child::before{bottom:calc(100% - 24px)}
+.dot{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:var(--lane);color:var(--on-lane);position:relative;z-index:1;font:600 .78rem/1 var(--f-mono)}
+.stop h3{font-size:1.05rem;margin-top:6px}
+.stop p{font-size:.9rem;color:var(--muted);margin-top:3px}
+
+/* ---------- Run ---------- */
+.run{display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:start}
+.run > *{min-width:0}
+.cmds{display:grid;gap:8px}
+.cmd{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 10px 10px 14px;min-width:0}
+.cmd code{flex:1;min-width:0;overflow-x:auto;white-space:nowrap;font:500 .85rem/1.4 var(--f-mono)}
+.cmd .why{font-size:.8rem;color:var(--muted);white-space:nowrap}
+.copy{font:600 .75rem/1 var(--f-body);padding:8px 11px;border-radius:999px;border:1px solid var(--line);background:var(--paper);color:var(--ink);cursor:pointer}
+.stack{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+.chip{font:500 .8rem/1 var(--f-mono);padding:8px 11px;border-radius:999px;border:1px solid var(--line);background:var(--surface)}
+
+footer{border-top:1px solid var(--line);padding-block:32px 48px;color:var(--muted);font-size:.88rem;display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px}
+
+@media (max-width:960px){
+  .hero,.finding,.run,.flowgrid{grid-template-columns:1fr}
+  .decisions{grid-template-columns:1fr 1fr}
+  .stats{grid-template-columns:1fr 1fr}
+  .stat:nth-child(2){border-right:none}
+  .stat:nth-child(-n+2){border-bottom:1px solid var(--line)}
+}
+@media (max-width:620px){
+  section{padding-block:54px}
+  .decisions,.groups,.route{grid-template-columns:1fr}
+  .route li:nth-child(7)::before{top:0}
+  .route li:nth-child(6)::before{bottom:0}
+  .cmd .why{display:none}
+  .rack{gap:7px}
+}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}.rider{transform:translateX(40vw)}}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="bike" viewBox="0 0 64 40">
+      <g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="14" cy="27" r="10"/><circle cx="50" cy="27" r="10"/>
+        <path d="M14 27 L25 12 L44 12 L50 27 M25 12 L32 27 L44 12 M32 27 H14 M25 12 L23 6 M19 6 H28 M44 12 L42 5 M39 5 H46"/>
+      </g>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="wrap">
+  <header class="hero">
+    <div>
+      <div class="brand"><svg aria-hidden="true"><use href="#bike"/></svg>dockwatch</div>
+      <div class="eyebrow">An end to end data pipeline on NYC bike share</div>
+      <h1 style="margin-top:14px">Where did all the <em>bikes</em> go?</h1>
+      <p class="lede">Every minute I stream the status of <b>every bike share station in NYC and Jersey City</b>, load every ride from the monthly trip files, and model where bikes pile up and where they run out.</p>
+      <div class="cta">
+        <a class="btn primary" href="https://github.com/Eeshapandit/dockwatch" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.78 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.7 5.4-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/></svg>
+          View the code
+        </a>
+        <a class="btn" href="#flows">Watch the city move</a>
+      </div>
+    </div>
+
+    <div class="dock" aria-label="Illustration of a station rack draining during the morning">
+      <div class="dock-top">
+        <div>
+          <div class="dock-name">A station in Jackson Heights</div>
+          <div class="dock-sub">15 docks · weekday morning</div>
+        </div>
+        <div class="clock" id="clock">7:00</div>
+      </div>
+      <div class="rack" id="rack"></div>
+      <div class="meter">
+        <div><b id="bikesLeft">15</b> <span class="muted">bikes left</span></div>
+        <span class="pill" id="dockPill">PLENTY</span>
+      </div>
+      <p class="illus">Illustration of the pattern, not a recording of one station.</p>
+    </div>
+  </header>
+
+  <div class="stats" id="stats" role="list"></div>
+</div>
+
+<div class="street" aria-hidden="true">
+  <div class="lane"></div>
+  <div class="stencils" id="stencils"></div>
+  <svg class="rider" viewBox="0 0 96 64">
+    <g fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">
+      <g class="spin"><circle cx="20" cy="46" r="13"/><path d="M20 33 V59 M7 46 H33"/></g>
+      <g class="spin"><circle cx="74" cy="46" r="13"/><path d="M74 33 V59 M61 46 H87"/></g>
+      <path d="M20 46 L36 26 L62 26 L74 46 M36 26 L46 46 L62 26 M46 46 H20 M36 26 L33 18 M28 18 H39 M62 26 L59 15 M55 15 H64"/>
+      <path d="M35 17 L48 4 L60 14 M48 4 L46 30 L52 40" stroke-width="4"/>
+    </g>
+    <circle cx="52" cy="2" r="5.5" fill="currentColor"/>
+  </svg>
+</div>
+
+<section class="flowsec" id="flows">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">A weekday, hour by hour</span>
+      <h2>Watch the city move</h2>
+      <p id="flowIntro">Every ride from the monthly trip files, replayed as an average weekday. Orange lines are the busiest routes. Red stations lose bikes that hour, green stations gain them.</p>
+    </div>
+    <div class="flowgrid">
+      <div class="mapbox" id="mapbox">
+        <svg class="basemap" id="basemap" role="img" aria-label="Map of New York City and Jersey City"></svg>
+        <canvas id="flowCanvas" aria-hidden="true"></canvas>
+        <div class="maphour"><small id="mapKicker">Weekday</small><span id="mapHour">8 AM</span></div>
+      </div>
+      <div class="side">
+        <div class="controls" id="controls">
+          <button class="play" id="play" type="button" aria-label="Pause">
+            <svg viewBox="0 0 24 24" fill="currentColor" id="playIcon"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg>
+          </button>
+          <input class="range" id="hour" type="range" min="0" max="23" value="8" aria-label="Hour of day">
+        </div>
+        <div id="barsWrap">
+          <div class="bars" id="bars" aria-label="Average weekday rides started per hour"></div>
+          <div class="bars-axis"><span>12 AM</span><span>6 AM</span><span>12 PM</span><span>6 PM</span><span>11 PM</span></div>
+        </div>
+        <div class="legend">
+          <span><i class="line" style="background:var(--route)"></i><span id="legendRoute">Busiest routes this hour</span></span>
+          <span><i style="background:var(--lose)"></i>Station losing bikes (more rides start than end)</span>
+          <span><i style="background:var(--gain)"></i>Station gaining bikes</span>
+        </div>
+        <div class="movers" id="movers"></div>
+        <p class="note" id="flowNote"></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="wrap">
+  <section id="finding">
+    <div class="sec-head">
+      <span class="eyebrow">The first finding, from the live stream</span>
+      <h2>Bikes ride into Manhattan, and stay there</h2>
+      <p>Morning commuters pick up bikes near home and dock them near work. By midday the residential stations are drained, and they stay empty until people ride home.</p>
+    </div>
+    <div class="finding">
+      <div class="story">
+        <div>
+          <div class="bignum"><b>171</b><span>stations with zero bikes at noon on Wednesday, Oct 21</span></div>
+          <div class="trend"><span>151 at 11:24</span><span class="arrow">→</span><span>171 at 12:02</span><span class="arrow">▲ 20 in 38 min</span></div>
+        </div>
+        <p class="muted">These 15 sat empty for the entire 30 minute window. Each mark is one dock, and every one is empty. The pattern is the commute: residential Queens, the Bronx and upper Manhattan drain into Midtown.</p>
+        <p class="footnote">Many more stations tied at the full 30 minutes. These are the first 15 alphabetically.</p>
+      </div>
+      <div class="groups" id="groups"></div>
+    </div>
+  </section>
+
+  <section id="how">
+    <div class="sec-head">
+      <span class="eyebrow">How it works</span>
+      <h2>Two lanes into one warehouse</h2>
+      <p>A streaming lane for live dock status, a batch lane for monthly ride history, and dbt turning both into tested answers.</p>
+    </div>
+    <div class="pipe-scroll">
+      <svg class="pipe" viewBox="0 0 1100 330" role="img" aria-label="Pipeline: live feed to producer to Redpanda to consumer to Postgres; trip files to Airflow to Parquet to Postgres; Postgres to dbt to dashboard and this page">
+        <text class="lanelbl" x="20" y="28">STREAMING · EVERY 60 SECONDS</text>
+        <text class="lanelbl" x="20" y="318">BATCH · MONTHLY, ORCHESTRATED BY AIRFLOW</text>
+
+        <path id="s1" class="edge" d="M150 80 H190"/><path id="s2" class="edge" d="M320 80 H360"/><path id="s3" class="edge" d="M490 80 H530"/>
+        <path id="s4" class="edge" d="M660 80 C690 80 690 165 720 165"/>
+        <path id="b1" class="edge" d="M150 260 H190"/><path id="b2" class="edge" d="M320 260 H360"/><path id="b3" class="edge" d="M490 260 H530"/>
+        <path id="b4" class="edge" d="M660 260 C690 260 690 165 720 165"/>
+        <path id="m1" class="edge" d="M850 165 H880"/><path id="m2" class="edge" d="M1010 150 C1030 150 1030 95 1050 95"/><path id="m3" class="edge" d="M1010 180 C1030 180 1030 235 1050 235"/>
+        <g id="pipeDots"></g>
+
+        <rect class="node" x="20" y="45" width="130" height="70" rx="14"/><text x="85" y="76" text-anchor="middle" font-size="14" font-weight="700">Live feed</text><text class="sub" x="85" y="96" text-anchor="middle" font-size="10">GBFS JSON</text>
+        <rect class="node" x="190" y="45" width="130" height="70" rx="14"/><text x="255" y="76" text-anchor="middle" font-size="14" font-weight="700">Producer</text><text class="sub" x="255" y="96" text-anchor="middle" font-size="10">real changes only</text>
+        <rect class="node" x="360" y="45" width="130" height="70" rx="14"/><text x="425" y="76" text-anchor="middle" font-size="14" font-weight="700">Redpanda</text><text class="sub" x="425" y="96" text-anchor="middle" font-size="10">Kafka topics</text>
+        <rect class="node" x="530" y="45" width="130" height="70" rx="14"/><text x="595" y="76" text-anchor="middle" font-size="14" font-weight="700">Consumer</text><text class="sub" x="595" y="96" text-anchor="middle" font-size="10">exactly once</text>
+
+        <rect class="node" x="20" y="225" width="130" height="70" rx="14"/><text x="85" y="256" text-anchor="middle" font-size="14" font-weight="700">Trip files</text><text class="sub" x="85" y="276" text-anchor="middle" font-size="10">monthly zip</text>
+        <rect class="node" x="190" y="225" width="130" height="70" rx="14"/><text x="255" y="256" text-anchor="middle" font-size="14" font-weight="700">Extract</text><text class="sub" x="255" y="276" text-anchor="middle" font-size="10">2 schemas → 1</text>
+        <rect class="node" x="360" y="225" width="130" height="70" rx="14"/><text x="425" y="256" text-anchor="middle" font-size="14" font-weight="700">Parquet</text><text class="sub" x="425" y="276" text-anchor="middle" font-size="10">typed, compressed</text>
+        <rect class="node" x="530" y="225" width="130" height="70" rx="14"/><text x="595" y="256" text-anchor="middle" font-size="14" font-weight="700">Load month</text><text class="sub" x="595" y="276" text-anchor="middle" font-size="10">atomic replace</text>
+
+        <rect class="store" x="720" y="125" width="130" height="80" rx="14"/><text x="785" y="160" text-anchor="middle" font-size="15" font-weight="700">Postgres</text><text class="sub" x="785" y="180" text-anchor="middle" font-size="10">raw layer</text>
+        <rect class="store" x="880" y="125" width="130" height="80" rx="14"/><text x="945" y="160" text-anchor="middle" font-size="15" font-weight="700">dbt</text><text class="sub" x="945" y="180" text-anchor="middle" font-size="10">11 models · 20 tests</text>
+        <rect class="node" x="1050" y="65" width="40" height="60" rx="10"/><text x="1070" y="100" text-anchor="middle" font-size="18">📊</text>
+        <rect class="node" x="1050" y="205" width="40" height="60" rx="10"/><text x="1070" y="240" text-anchor="middle" font-size="18">🌐</text>
+      </svg>
+    </div>
+    <p class="muted" style="font-size:.9rem;margin-top:10px">📊 Streamlit dashboard · 🌐 this page, exported from the dbt marts</p>
+  </section>
+
+  <section id="decisions">
+    <div class="sec-head">
+      <span class="eyebrow">Design decisions</span>
+      <h2>Every choice has a reason</h2>
+      <p>Each one came from a real problem in the data.</p>
+    </div>
+    <div class="decisions">
+      <div class="dec"><span class="q">Rerunning a load</span><h3>Idempotent by design</h3><p>A composite key <code>(station_id, last_reported)</code> plus <code>on conflict do nothing</code>. A rerun inserts exactly 0 rows.</p></div>
+      <div class="dec"><span class="q">Fake 1970 timestamps</span><h3>Fix the cause</h3><p>54 stations reported Jan 2, 1970. The real reason was <code>is_installed = false</code>, so that is what the filter checks.</p></div>
+      <div class="dec"><span class="q">1,700 rows a minute</span><h3>Duplicate ≠ redundant</h3><p>Stations send heartbeats when nothing changed. The producer compares each station's state and only sends real changes.</p></div>
+      <div class="dec"><span class="q">Crash mid batch</span><h3>Exactly once, in effect</h3><p>The consumer commits Kafka offsets only after the database transaction. Replays are harmless because every insert is idempotent.</p></div>
+      <div class="dec"><span class="q">Two CSV schemas</span><h3>Normalize at the edge</h3><p>Pre 2021 files use different columns and no ride id. One function maps both, so nothing downstream cares which year it is.</p></div>
+      <div class="dec"><span class="q">Reloading a month</span><h3>Atomic replace</h3><p>Delete the month and insert it again in one transaction. Readers never see half a month, and Airflow can retry safely.</p></div>
+      <div class="dec"><span class="q">Snapshots, not durations</span><h3>Spells with LEAD()</h3><p>Each stored state lasts until the station's next row. Spells are split at hour boundaries to get minutes empty per hour.</p></div>
+      <div class="dec"><span class="q">Two kinds of station id</span><h3>Join on the right key</h3><p>Trip files use the station's <code>short_name</code>, not the live feed's <code>station_id</code>. Locations come from ride coordinates, by median.</p></div>
+      <div class="dec"><span class="q">Pipeline outages</span><h3>No invented spells</h3><p>Open spells end where the data ends, and none lasts over 12 hours, so a laptop going to sleep can't fake a 3 day empty station.</p></div>
+    </div>
+  </section>
+
+  <section id="log">
+    <div class="sec-head">
+      <span class="eyebrow">Build log</span>
+      <h2>The route, start to finish</h2>
+      <p>One concept per stop. Each one is a commit in the repo.</p>
+    </div>
+    <ol class="route" id="route"></ol>
+  </section>
+
+  <section id="run">
+    <div class="run">
+      <div class="sec-head" style="margin-bottom:0">
+        <span class="eyebrow">Run it yourself</span>
+        <h2>One command</h2>
+        <p>Runs in GitHub Codespaces with nothing installed locally. Every push is tested by GitHub Actions: unit tests plus a full dbt build on a throwaway database.</p>
+        <div class="stack">
+          <span class="chip">Python</span><span class="chip">Redpanda (Kafka)</span><span class="chip">PostgreSQL</span><span class="chip">Airflow</span><span class="chip">dbt</span><span class="chip">Parquet</span><span class="chip">Docker</span><span class="chip">Streamlit</span><span class="chip">GitHub Actions</span>
+        </div>
+      </div>
+      <div class="cmds" id="cmds"></div>
+    </div>
+  </section>
+</div>
+
+<div class="wrap">
+  <footer>
+    <span>Built by <a href="https://www.linkedin.com/in/eesha-pandit-ba61751b9" target="_blank" rel="noopener">Eesha Pandit</a></span>
+    <span id="credits">Live data from the public GBFS feed, rides from the public System Data trip files. Map: NYC borough boundaries (NYC Open Data) and Census ZIP areas for New Jersey. Independent project, not affiliated with any bike share operator.</span>
+  </footer>
+</div>
+
+<script>
+const BASEMAP = /*BASEMAP*/;
+const EMBEDDED_DATA = /*DATA*/;
+(function(){
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt = n => Number(n).toLocaleString('en-US');
+const bikeSvg = '<svg viewBox="0 0 64 40" aria-hidden="true"><use href="#bike"/></svg>';
+const hourLabel = h => (h % 12 || 12) + (h < 12 ? ' AM' : ' PM');
+
+/* ---------------- dock illustration ---------------- */
+const N = 15, rack = $('#rack');
+rack.innerHTML = Array.from({length:N},()=>`<div class="slot">${bikeSvg}</div>`).join('');
+const slots = [...rack.children], order = [3,11,7,0,14,5,9,2,12,6,10,1,13,4,8];
+let step = 0;
+function renderDock(){
+  const gone = Math.min(step, N), left = N - gone;
+  slots.forEach((s,i)=>s.classList.toggle('gone', order.indexOf(i) < gone));
+  $('#bikesLeft').textContent = left;
+  const mins = 7*60 + Math.round(gone * (300/N));
+  $('#clock').textContent = Math.floor(mins/60) + ':' + String(mins%60).padStart(2,'0');
+  const p = $('#dockPill');
+  p.textContent = left===0 ? 'EMPTY' : left<=4 ? 'RUNNING LOW' : 'PLENTY';
+  p.className = 'pill' + (left<=4 ? ' empty' : '');
+}
+if (reduce) { step = N; renderDock(); } else { renderDock(); setInterval(()=>{ step = step >= N+4 ? 0 : step+1; renderDock(); }, 750); }
+$('#stencils').innerHTML = Array.from({length:10},()=>'<svg viewBox="0 0 64 40"><use href="#bike"/></svg>').join('');
+
+/* ---------------- static finding (live stream, Oct 21) ---------------- */
+const GROUPS = [
+  {area:'Jackson Heights & East Elmhurst', boro:'Queens', st:[['34 Ave & 83 St',22],['81 St & 35 Ave',25],['86 St & 37 Ave',22],['90 St & 32 Ave',20],['92 St & 37 Ave',19]]},
+  {area:'The Bronx', boro:'Bronx', st:[['3 Ave & Franklin Ave',19],['Anthony Ave & E 175 St',19],['Anthony Ave & E Tremont Ave',20],['Aqueduct Ave & W 190 St',20]]},
+  {area:'Sunnyside & Woodside', boro:'Queens', st:[['48 St & 50 Ave',21],['48 St & Skillman Ave',22]]},
+  {area:'Ridgewood & Glendale', boro:'Queens', st:[['60 Pl & 67 Ave',15],['65 Pl & Central Ave',21]]},
+  {area:'Washington Heights', boro:'Manhattan', st:[['Audubon Ave & Fort George Ave',23]]},
+  {area:'East New York', boro:'Brooklyn', st:[['Arlington Ave & Warwick St',18]]}
+];
+$('#groups').innerHTML = GROUPS.map(g=>`<div class="group"><h3>${g.area}<span>${g.boro.toUpperCase()} · ${g.st.length}</span></h3>${
+  g.st.map(([n,c])=>`<div class="st"><span class="st-name">${n}</span><span class="docks" aria-label="${c} docks, 0 bikes">${'<i></i>'.repeat(c)}<em>0 / ${c}</em></span></div>`).join('')}</div>`).join('');
+
+/* ---------------- build log ---------------- */
+const STOPS=[
+  ['Explore the live feed','Look at the source before designing anything'],
+  ['Clean rows + table design','Grain, composite keys, types, dirty data'],
+  ['Postgres in Docker','Volumes, ETL, transactions, idempotency'],
+  ['Poll every minute','Logging, error handling, drift free scheduling'],
+  ['Station names','Upserts, facts vs dimensions, joins'],
+  ['Only real changes','Duplicate vs redundant data, change detection'],
+  ['Redpanda producer','Topics, partitions, keys, idempotent producer'],
+  ['Consumer','Offsets after commit, exactly once in effect'],
+  ['Trip files to Parquet','Two schemas into one, typed columnar storage'],
+  ['Monthly loads','Atomic replace, backfills, rerun safety'],
+  ['Airflow + dbt','Orchestration, 11 models, 20 data tests'],
+  ['Dashboard + CI','Streamlit, pydeck, GitHub Actions']
+];
+$('#route').innerHTML = STOPS.map(([t,d],i)=>`<li class="stop"><span class="dot">${i+1}</span><div><h3>${t}</h3><p>${d}</p></div></li>`).join('');
+
+/* ---------------- commands ---------------- */
+const CMDS=[
+  ['make showcase','everything, end to end'],
+  ['make streaming','live stream only'],
+  ['make trips MONTH=202509','one month of rides'],
+  ['make dbt','build + test models'],
+  ['make dashboard','open port 8501'],
+  ['make airflow','open port 8081']
+];
+$('#cmds').innerHTML = CMDS.map(([c,w],i)=>`<div class="cmd"><code id="c${i}"></code><span class="why">${w}</span><button class="copy" type="button" data-i="${i}">Copy</button></div>`).join('');
+CMDS.forEach(([c],i)=>{ $('#c'+i).textContent = c; });
+document.querySelectorAll('.copy').forEach(b=>b.addEventListener('click', async()=>{
+  const el = $('#c'+b.dataset.i);
+  try { await navigator.clipboard.writeText(el.textContent); b.textContent='Copied'; }
+  catch(e){ const r=document.createRange(); r.selectNodeContents(el); const s=getSelection(); s.removeAllRanges(); s.addRange(r); b.textContent='Selected'; }
+  setTimeout(()=>b.textContent='Copy', 1400);
+}));
+
+/* ---------------- basemap ---------------- */
+const W = BASEMAP.w, H = BASEMAP.h;
+const project = (lat, lng) => [(lng - BASEMAP.lon0) * BASEMAP.c * BASEMAP.k, (BASEMAP.lat1 - lat) * BASEMAP.k];
+const bm = $('#basemap');
+bm.setAttribute('viewBox', `0 0 ${W} ${H}`);
+const LABELS = {Manhattan:[40.792,-73.972,-62], Bronx:[40.862,-73.875,0], Queens:[40.725,-73.845,0], Brooklyn:[40.664,-73.952,0]};
+bm.innerHTML = `<path class="nj" d="${BASEMAP.nj}"/>` +
+  Object.entries(BASEMAP.boros).map(([n,d])=>`<path class="boro" d="${d}"/>`).join('') +
+  Object.entries(LABELS).map(([n,[la,ln,rot]])=>{ const [x,y]=project(la,ln); return `<text class="lbl" x="${x.toFixed(0)}" y="${y.toFixed(0)}" text-anchor="middle" transform="rotate(${rot} ${x.toFixed(0)} ${y.toFixed(0)})">${n}</text>`; }).join('') +
+  (()=>{ const [x,y]=project(40.722,-74.058); return `<text class="lbl" x="${x}" y="${y}" text-anchor="middle">Jersey City</text>`; })();
+
+/* ---------------- flow animation ---------------- */
+const canvas = $('#flowCanvas'), ctx = canvas.getContext('2d');
+const css = getComputedStyle(document.documentElement);
+const C = { route: css.getPropertyValue('--route').trim(), spark: css.getPropertyValue('--spark').trim(),
+            lose: css.getPropertyValue('--lose').trim(), gain: css.getPropertyValue('--gain').trim() };
+let scale = 1, routes = [], dots = [], particles = [], playing = !reduce, hour = 8, data = null, timer = null;
+
+function size(){
+  const r = canvas.getBoundingClientRect(), dpr = Math.min(devicePixelRatio || 1, 2);
+  canvas.width = Math.round(r.width * dpr); canvas.height = Math.round(r.height * dpr);
+  scale = canvas.width / W;
+}
+new ResizeObserver(()=>{ size(); if (reduce || !playing) draw(0); }).observe(canvas);
+
+function curve(a, b){
+  const [x1,y1]=a, [x2,y2]=b, mx=(x1+x2)/2, my=(y1+y2)/2, dx=x2-x1, dy=y2-y1, len=Math.hypot(dx,dy)||1;
+  const bend = Math.min(0.28*len, 90);
+  return {x1,y1,x2,y2,cx:mx - dy/len*bend, cy:my + dx/len*bend, len};
+}
+const at = (r,t) => { const u=1-t; return [u*u*r.x1+2*u*t*r.cx+t*t*r.x2, u*u*r.y1+2*u*t*r.cy+t*t*r.y2]; };
+
+function setScene(newRoutes, newDots){
+  routes = newRoutes; dots = newDots; particles = [];
+  const maxT = Math.max(1, ...routes.map(r=>r.w));
+  routes.forEach(r=>{
+    r.alpha = 0.12 + 0.5 * Math.sqrt(r.w / maxT);
+    const n = Math.max(1, Math.round(5 * Math.sqrt(r.w / maxT)));
+    for (let i=0;i<n;i++) particles.push({r, t: Math.random(), v: (0.0035 + Math.random()*0.002) * (220 / Math.max(r.len, 60))});
+  });
+  if (reduce || !playing) draw(0);
+}
+
+function draw(dt){
+  ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.setTransform(scale,0,0,scale,0,0);
+  ctx.lineCap = 'round';
+  for (const r of routes){
+    ctx.strokeStyle = C.route; ctx.globalAlpha = r.alpha; ctx.lineWidth = 1.1 + 2.6 * (r.alpha - .12);
+    ctx.beginPath(); ctx.moveTo(r.x1,r.y1); ctx.quadraticCurveTo(r.cx,r.cy,r.x2,r.y2); ctx.stroke();
+  }
+  for (const d of dots){
+    ctx.globalAlpha = 0.78; ctx.fillStyle = d.net < 0 ? C.lose : C.gain;
+    ctx.beginPath(); ctx.arc(d.x, d.y, d.rad, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.fillStyle = C.spark;
+  for (const p of particles){
+    p.t += p.v * dt; if (p.t > 1) p.t -= 1;
+    const [x,y] = at(p.r, p.t);
+    ctx.globalAlpha = 0.95 * Math.sin(Math.PI * p.t) + 0.05;
+    ctx.beginPath(); ctx.arc(x, y, 2.6, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+let last = performance.now();
+function loop(now){ const dt = Math.min(3, (now - last) / 16.67); last = now; if (playing) draw(dt); requestAnimationFrame(loop); }
+
+/* ---------------- real data mode ---------------- */
+function sceneForHour(h){
+  const S = data.stations, flows = (data.flows||{})[h] || [], net = (data.net||{})[h] || [];
+  const rs = flows.map(([a,b,n])=>{ const r = curve(project(S[a][1],S[a][2]), project(S[b][1],S[b][2])); r.w = n; return r; });
+  const maxN = Math.max(1, ...net.map(x=>Math.abs(x[1])));
+  const ds = net.filter(x=>x[1]!==0).map(([i,n])=>{ const [x,y]=project(S[i][1],S[i][2]); return {x,y,net:n,rad:2.5 + 9*Math.sqrt(Math.abs(n)/maxN)}; });
+  setScene(rs, ds);
+  const sorted = [...net].sort((a,b)=>a[1]-b[1]);
+  const lose = sorted.slice(0,3).filter(x=>x[1]<0), gain = sorted.slice(-3).reverse().filter(x=>x[1]>0);
+  $('#movers').innerHTML =
+    lose.map(([i,n])=>`<div class="mover"><span class="tag l">LOSING</span><span>${esc(S[i][0])}</span><b>${n}</b></div>`).join('') +
+    gain.map(([i,n])=>`<div class="mover"><span class="tag g">GAINING</span><span>${esc(S[i][0])}</span><b>+${n}</b></div>`).join('');
+}
+function setHour(h){
+  hour = h; $('#hour').value = h; $('#mapHour').textContent = hourLabel(h);
+  document.querySelectorAll('#bars button').forEach((b,i)=>b.classList.toggle('on', i===h));
+  if (data) sceneForHour(String(h));
+}
+function setPlaying(p){
+  playing = p && !reduce;
+  $('#play').setAttribute('aria-label', playing ? 'Pause' : 'Play');
+  $('#playIcon').innerHTML = playing ? '<path d="M7 5h4v14H7zM13 5h4v14h-4z"/>' : '<path d="M8 5v14l11-7z"/>';
+  clearInterval(timer);
+  if (playing && data) timer = setInterval(()=>setHour((hour+1)%24), 3200);
+}
+$('#play').addEventListener('click', ()=>setPlaying(!playing));
+$('#hour').addEventListener('input', e=>{ setPlaying(false); setHour(+e.target.value); });
+
+function startReal(d){
+  data = d;
+  const hourly = d.hourly || [], max = Math.max(1, ...hourly.map(x=>x.weekday));
+  const byHour = Object.fromEntries(hourly.map(x=>[x.hour, x.weekday]));
+  $('#bars').innerHTML = Array.from({length:24},(_,h)=>`<button type="button" style="height:${Math.max(4, 100*(byHour[h]||0)/max)}%" aria-label="${hourLabel(h)}: ${fmt(byHour[h]||0)} rides per weekday" title="${hourLabel(h)} · ${fmt(byHour[h]||0)} rides"></button>`).join('');
+  document.querySelectorAll('#bars button').forEach((b,i)=>b.addEventListener('click',()=>{ setPlaying(false); setHour(i); }));
+  const st = d.stats || {}, months = st.trip_months || [];
+  const monthName = m => m ? new Date(+m.slice(0,4), +m.slice(4)-1, 1).toLocaleString('en-US',{month:'long',year:'numeric'}) : '';
+  $('#mapKicker').textContent = 'Average weekday' + (months[0] ? ' · ' + monthName(months[1]||months[0]) : '');
+  $('#flowNote').textContent = `${fmt(st.trips_loaded||0)} rides loaded. Showing the ${fmt(Math.max(...Object.values(d.flows||{}).map(v=>v.length),0))} busiest routes and the stations that gain or lose the most each hour. Exported ${String(d.generated_at||'').slice(0,10)}.`;
+  setHour(8); setPlaying(!reduce);
+  renderStats(st);
+}
+
+/* ---------------- preview mode, before trip data is exported ---------------- */
+const HOODS = [['Jackson Heights',40.7557,-73.8831,5],['The Bronx',40.8470,-73.8970,4],['Sunnyside',40.7433,-73.9196,2],
+               ['Ridgewood',40.7044,-73.9018,2],['Washington Heights',40.8510,-73.9360,1],['East New York',40.6660,-73.8820,1]];
+function startPreview(){
+  const mid = project(40.7549,-73.9840);
+  const rs = HOODS.map(([n,la,ln,c])=>{ const r = curve(project(la,ln), mid); r.w = c; return r; });
+  const ds = HOODS.map(([n,la,ln,c])=>{ const [x,y]=project(la,ln); return {x,y,net:-c,rad:5+3*c}; }).concat([{x:mid[0],y:mid[1],net:1,rad:14}]);
+  setScene(rs, ds);
+  $('#controls').hidden = true; $('#barsWrap').hidden = true;
+  $('#mapKicker').textContent = 'Live stream · Oct 21'; $('#mapHour').textContent = 'Noon';
+  $('#flowIntro').textContent = 'A preview from the live stream: neighborhoods whose stations sat empty all of noon on Oct 21, and where those bikes went. The full hour by hour replay of every ride appears once the monthly trip data is exported.';
+  $('#movers').innerHTML = HOODS.map(([n,,,c])=>`<div class="mover"><span class="tag l">EMPTY</span><span>${n}</span><b>${c}</b></div>`).join('');
+  $('#flowNote').textContent = 'Neighborhood positions are approximate. Line thickness = stations empty in that area.';
+  $('#legendRoute').textContent = 'Where those bikes went (Midtown)';
+  renderStats({});
+}
+
+function renderStats(st){
+  const items = [
+    [st.stations_tracked ? fmt(st.stations_tracked) : '2,519', 'stations tracked live'],
+    [st.trips_loaded ? fmt(st.trips_loaded) : '60s', st.trips_loaded ? 'rides modeled' : 'between every poll'],
+    ['171', 'empty at noon on Oct 21'],
+    ['20', 'dbt data tests on every build']
+  ];
+  $('#stats').innerHTML = items.map(([b,s])=>`<div class="stat" role="listitem"><b>${b}</b><span>${s}</span></div>`).join('');
+}
+
+/* ---------------- pipeline dots ---------------- */
+const NS = 'http://www.w3.org/2000/svg', pd = $('#pipeDots');
+if (!reduce){
+  [['s1',0],['s2',.3],['s3',.6],['s4',.9],['b1',.2],['b2',.5],['b3',.8],['b4',1.1],['m1',1.3],['m2',1.5],['m3',1.7]].forEach(([id,delay])=>{
+    const c = document.createElementNS(NS,'circle'); c.setAttribute('r','4.5'); c.setAttribute('class','dot' + (id[0]==='b' ? ' b' : ''));
+    const a = document.createElementNS(NS,'animateMotion'); a.setAttribute('dur','1.8s'); a.setAttribute('repeatCount','indefinite'); a.setAttribute('begin', (-delay)+'s');
+    const m = document.createElementNS(NS,'mpath'); m.setAttribute('href','#'+id); a.appendChild(m); c.appendChild(a); pd.appendChild(c);
+  });
+}
+
+/* ---------------- boot ---------------- */
+size();
+renderStats({});
+requestAnimationFrame(loop);
+const useData = d => (d && d.flows && Object.keys(d.flows).length ? startReal(d) : startPreview());
+if (EMBEDDED_DATA) useData(EMBEDDED_DATA);
+else fetch('data.json', {cache:'no-store'}).then(r => r.ok ? r.json() : null).then(useData).catch(()=>startPreview());
+})();
+</script>

@@ -1,23 +1,122 @@
-# Step 3: our infrastructure, described as code.
-# One command (docker compose up -d) starts everything listed here.
+# The whole stack, as code. Profiles keep the Codespace light:
+#   docker compose up -d                          -> just Postgres
+#   docker compose --profile streaming up -d      -> + Redpanda, producer, consumer
+#   docker compose --profile dashboard up -d      -> + Streamlit dashboard
+#   docker compose --profile airflow up -d        -> + Airflow
+#   docker compose run --rm app <command>         -> one off jobs (trips, dbt, export)
+
+x-app: &app
+  build: .
+  image: dockwatch-app
+  volumes:
+    - .:/app                       # live code + outputs (docs/data.json, data/) land in the repo
+  environment:
+    PG_DSN: postgresql://dockwatch:dockwatch@postgres:5432/dockwatch
+    DBT_HOST: postgres
+    KAFKA_BOOTSTRAP: redpanda:9092
+  depends_on:
+    postgres: { condition: service_healthy }
 
 services:
   postgres:
-    image: postgres:16              # official Postgres, version pinned so it never changes under us
+    image: postgres:16
     container_name: dockwatch-db
-    environment:                    # the image reads these on FIRST start to create user + db
+    environment:
       POSTGRES_USER: dockwatch
-      POSTGRES_PASSWORD: dockwatch  # fine for local learning, never commit real passwords
+      POSTGRES_PASSWORD: dockwatch   # local only. Never commit real passwords.
       POSTGRES_DB: dockwatch
-    ports:
-      - "5432:5432"                 # host port : container port, so Python can reach it at localhost:5432
+    ports: ["5432:5432"]
     volumes:
-      - pgdata:/var/lib/postgresql/data              # keep data when the container restarts
-      - ./sql:/docker-entrypoint-initdb.d:ro         # run our .sql files on first start (ro = read only)
-    healthcheck:                    # lets Docker tell "running" from "actually ready for queries"
+      - pgdata:/var/lib/postgresql/data
+      - ./sql:/docker-entrypoint-initdb.d:ro
+    healthcheck:
       test: ["CMD-SHELL", "pg_isready -U dockwatch -d dockwatch"]
       interval: 5s
       retries: 10
 
+  # ---------------------------------------------------------------- streaming (Steps 7, 8)
+  redpanda:
+    profiles: ["streaming"]
+    image: redpandadata/redpanda:v24.2.7
+    command:
+      - redpanda start
+      - --mode dev-container
+      - --smp 1
+      - --memory 1G
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
+    ports: ["19092:19092"]
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -q 'Healthy:.*true'"]
+      interval: 5s
+      retries: 20
+
+  topics:   # creates the topics once, then exits
+    profiles: ["streaming"]
+    image: redpandadata/redpanda:v24.2.7
+    depends_on: { redpanda: { condition: service_healthy } }
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >
+        rpk -X brokers=redpanda:9092 topic create gbfs.station_status -p 3 -c retention.ms=604800000 || true;
+        rpk -X brokers=redpanda:9092 topic create gbfs.station_information -p 1 -c cleanup.policy=compact || true
+
+  console:  # web UI to browse topics and messages: port 8080
+    profiles: ["streaming"]
+    image: redpandadata/console:v2.7.2
+    depends_on: { redpanda: { condition: service_healthy } }
+    environment: { KAFKA_BROKERS: redpanda:9092 }
+    ports: ["8080:8080"]
+
+  producer:
+    <<: *app
+    profiles: ["streaming"]
+    command: python producer.py
+    restart: unless-stopped
+    depends_on: { topics: { condition: service_completed_successfully } }
+
+  consumer:
+    <<: *app
+    profiles: ["streaming"]
+    command: python consumer.py
+    restart: unless-stopped
+    depends_on:
+      topics: { condition: service_completed_successfully }
+      postgres: { condition: service_healthy }
+
+  # ---------------------------------------------------------------- one off jobs
+  app:
+    <<: *app
+    profiles: ["tools"]
+
+  # ---------------------------------------------------------------- dashboard (Step 13)
+  dashboard:
+    <<: *app
+    profiles: ["dashboard"]
+    command: streamlit run dashboard/app.py --server.port 8501 --server.address 0.0.0.0 --server.headless true
+    ports: ["8501:8501"]
+
+  # ---------------------------------------------------------------- orchestration (Step 11)
+  airflow:
+    profiles: ["airflow"]
+    build: ./airflow
+    image: dockwatch-airflow
+    command: >
+      bash -c "airflow db migrate &&
+      (airflow users create -u admin -p admin -f Admin -l User -r Admin -e admin@example.com || true) &&
+      exec airflow standalone"
+    environment:
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__DAGS_FOLDER: /opt/dockwatch/airflow/dags
+      PYTHONPATH: /opt/dockwatch
+      DATA_DIR: /opt/dockwatch/data
+      PG_DSN: postgresql://dockwatch:dockwatch@postgres:5432/dockwatch
+      DBT_HOST: postgres
+    volumes:
+      - .:/opt/dockwatch
+    ports: ["8081:8080"]   # 8080 is taken by the Redpanda console
+    depends_on:
+      postgres: { condition: service_healthy }
+
 volumes:
-  pgdata:                           # a named volume Docker manages for us
+  pgdata:
