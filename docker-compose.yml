@@ -1,0 +1,23 @@
+# Step 3: our infrastructure, described as code.
+# One command (docker compose up -d) starts everything listed here.
+
+services:
+  postgres:
+    image: postgres:16              # official Postgres, version pinned so it never changes under us
+    container_name: dockwatch-db
+    environment:                    # the image reads these on FIRST start to create user + db
+      POSTGRES_USER: dockwatch
+      POSTGRES_PASSWORD: dockwatch  # fine for local learning, never commit real passwords
+      POSTGRES_DB: dockwatch
+    ports:
+      - "5432:5432"                 # host port : container port, so Python can reach it at localhost:5432
+    volumes:
+      - pgdata:/var/lib/postgresql/data              # keep data when the container restarts
+      - ./sql:/docker-entrypoint-initdb.d:ro         # run our .sql files on first start (ro = read only)
+    healthcheck:                    # lets Docker tell "running" from "actually ready for queries"
+      test: ["CMD-SHELL", "pg_isready -U dockwatch -d dockwatch"]
+      interval: 5s
+      retries: 10
+
+volumes:
+  pgdata:                           # a named volume Docker manages for us
