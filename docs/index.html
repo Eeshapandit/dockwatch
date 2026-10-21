@@ -195,6 +195,9 @@ section{padding-block:76px}
 .about-body p b{color:var(--ink);font-weight:600}
 .creds{display:flex;flex-wrap:wrap;gap:8px}
 .links{display:flex;flex-wrap:wrap;gap:10px;margin-top:6px}
+.open{display:inline-flex;align-items:center;gap:9px;justify-self:start;font:600 .85rem/1.3 var(--f-body);padding:8px 14px;border-radius:999px;background:var(--lane-soft);color:var(--lane)}
+.open i{width:9px;height:9px;border-radius:50%;background:var(--lane);flex:none;box-shadow:0 0 0 4px var(--lane-soft);animation:pulse 2s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.35}}
 .byline-link{color:inherit;text-decoration:none;border-bottom:1.5px solid var(--lane)}
 @media (max-width:620px){.about{grid-template-columns:1fr;padding:26px}}
 footer{border-top:1px solid var(--line);padding-block:32px 48px;color:var(--muted);font-size:.88rem;display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px}
@@ -417,8 +420,9 @@ footer{border-top:1px solid var(--line);padding-block:32px 48px;color:var(--mute
       <div class="avatar" aria-hidden="true">EP<svg viewBox="0 0 64 40"><use href="#bike"/></svg></div>
       <div class="about-body">
         <span class="eyebrow">About me</span>
-        <h2>Hi, I'm Eesha</h2>
-        <p>I'm a <b>Data and AI Engineer at Adjmi Apparel Group</b> in New York, where I build ERP data pipelines, look after our data warehouse and turn it all into Power BI reporting for the whole company.</p>
+        <h2>Hi, I'm Eesha Pandit</h2>
+        <span class="open"><i></i>Open to Forward Deployed Engineer and Data Engineer roles</span>
+        <p>I'm a <b>Data and AI Engineer at one of NYC's largest apparel companies</b>, where I build ERP data pipelines, look after our data warehouse and turn it all into Power BI reporting for the whole company.</p>
         <p>I built dockwatch to go deeper on the modern open source stack: streaming with Kafka, orchestration with Airflow, modeling and testing with dbt. I commute into Manhattan every day, so the rush hour pattern in this data felt personal.</p>
         <div class="creds">
           <span class="chip">M.S. Information Technology &amp; Analytics, Rutgers Business School</span>
@@ -427,7 +431,7 @@ footer{border-top:1px solid var(--line);padding-block:32px 48px;color:var(--mute
         </div>
         <div class="links">
           <a class="btn primary" href="https://eeshapanditt11.netlify.app" target="_blank" rel="noopener">See my portfolio</a>
-          <a class="btn" href="https://www.linkedin.com/in/eesha-pandit-ba61751b9" target="_blank" rel="noopener">LinkedIn</a>
+          <a class="btn" href="https://www.linkedin.com/in/eesha-pandit-ba61751b9" target="_blank" rel="noopener">Let's talk on LinkedIn</a>
           <a class="btn" href="https://github.com/Eeshapandit" target="_blank" rel="noopener">GitHub</a>
         </div>
       </div>
