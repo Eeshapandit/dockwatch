@@ -1,0 +1,648 @@
+<title>dockwatch</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: a city street by day, a night map for the flows. Paper sidewalk sections, a painted bike lane strip,
+   one dark "night city" map where trips flow, and the build log drawn as a bike route with stops. */
+:root{
+  --paper:#F2F5F0; --surface:#FFFFFF; --ink:#15241C; --muted:#5B6B62; --line:#D5DED7;
+  --lane:#2E8B57; --lane-soft:#DCEFE3; --empty:#C9771A; --empty-soft:#FBEBD3;
+  --asphalt:#2B3430; --paint:#F6F8F6; --on-lane:#FFFFFF;
+  /* the night map is one fixed look in both themes */
+  --night:#0C1311; --night-land:#18221E; --night-edge:#26332C; --night-ink:#E8EFEA; --night-muted:#8FA096;
+  --route:#F2A341; --spark:#FFD58A; --lose:#F0563E; --gain:#3CCB7F;
+  --f-display:"Bricolage Grotesque","Avenir Next","Segoe UI",sans-serif;
+  --f-body:"Figtree","Segoe UI",system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#0F1512; --surface:#16201B; --ink:#E6EEE8; --muted:#94A49B; --line:#26332C;
+  --lane:#4CC285; --lane-soft:#183022; --empty:#F0A541; --empty-soft:#3A2A12;
+  --asphalt:#1E2622; --paint:#DCE4DF; --on-lane:#0F1512; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#0F1512; --surface:#16201B; --ink:#E6EEE8; --muted:#94A49B; --line:#26332C;
+  --lane:#4CC285; --lane-soft:#183022; --empty:#F0A541; --empty-soft:#3A2A12;
+  --asphalt:#1E2622; --paint:#DCE4DF; --on-lane:#0F1512; color-scheme:dark}
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--paper);color:var(--ink);font:400 17px/1.6 var(--f-body);-webkit-font-smoothing:antialiased}
+.wrap{max-width:1160px;margin:0 auto;padding-left:max(20px,env(safe-area-inset-left,0px));padding-right:max(20px,env(safe-area-inset-right,0px))}
+h1,h2,h3{font-family:var(--f-display);margin:0;line-height:1.02;text-wrap:balance;letter-spacing:-.02em}
+h2{font-size:clamp(2rem,4.6vw,3.2rem);font-weight:800}
+h3{font-size:1.15rem;font-weight:700;letter-spacing:-.01em}
+p{margin:0}
+a{color:var(--lane)}
+button{font:inherit}
+:focus-visible{outline:2.5px solid var(--lane);outline-offset:3px;border-radius:4px}
+.eyebrow{font:600 .74rem/1 var(--f-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--lane)}
+.muted{color:var(--muted)}
+section{padding-block:76px}
+.sec-head{display:grid;gap:12px;margin-bottom:36px;max-width:700px}
+.sec-head p{color:var(--muted);font-size:1.08rem}
+
+/* ---------- Hero ---------- */
+.hero{display:grid;grid-template-columns:1.1fr .9fr;gap:56px;align-items:center;padding-block:64px 44px}
+.hero > *{min-width:0}
+.brand{display:flex;align-items:center;gap:10px;font:800 1.15rem/1 var(--f-display);margin-bottom:28px}
+.brand svg{width:34px;height:22px;color:var(--lane)}
+.hero h1{font-size:clamp(3rem,8vw,5.6rem);font-weight:800;letter-spacing:-.035em}
+.hero h1 em{font-style:normal;color:var(--lane)}
+.lede{font-size:1.2rem;margin-top:22px;max-width:38ch;color:var(--muted)}
+.lede b{color:var(--ink);font-weight:600}
+.cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:30px}
+.btn{display:inline-flex;align-items:center;gap:8px;font:600 .95rem/1 var(--f-body);padding:13px 18px;border-radius:999px;text-decoration:none;border:1.5px solid var(--ink);color:var(--ink);background:transparent;cursor:pointer}
+.btn.primary{background:var(--lane);border-color:var(--lane);color:var(--on-lane)}
+.btn svg{width:18px;height:18px}
+
+.dock{background:var(--surface);border:1px solid var(--line);border-radius:22px;padding:26px;box-shadow:0 30px 60px -40px rgba(20,40,30,.35)}
+.dock-top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.dock-name{font:700 1.15rem/1.2 var(--f-display)}
+.dock-sub{font:500 .72rem/1.4 var(--f-mono);color:var(--muted);margin-top:4px}
+.clock{font:600 1.5rem/1 var(--f-mono);font-variant-numeric:tabular-nums}
+.rack{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin:22px 0 18px}
+.slot{aspect-ratio:1.5/1;border-radius:10px;border:1.5px dashed var(--line);display:grid;place-items:center;transition:background .5s,border-color .5s}
+.slot svg{width:78%;color:var(--lane);transition:opacity .5s,transform .5s}
+.slot.gone{border-color:var(--empty);background:var(--empty-soft)}
+.slot.gone svg{opacity:0;transform:translateX(30%)}
+.meter{display:flex;justify-content:space-between;align-items:baseline;gap:12px;border-top:1px solid var(--line);padding-top:14px}
+.meter b{font:800 2.4rem/1 var(--f-display);font-variant-numeric:tabular-nums}
+.pill{font:600 .72rem/1 var(--f-mono);letter-spacing:.08em;padding:7px 10px;border-radius:999px;background:var(--lane-soft);color:var(--lane);transition:background .4s,color .4s}
+.pill.empty{background:var(--empty-soft);color:var(--empty)}
+.illus{font-size:.78rem;color:var(--muted);margin-top:12px}
+
+.stats{display:grid;grid-template-columns:repeat(4,1fr);border-block:1px solid var(--line)}
+.stat{padding:20px 18px;border-right:1px solid var(--line);min-width:0}
+.stat:last-child{border-right:none}
+.stat b{display:block;font:800 clamp(1.6rem,3.4vw,2.3rem)/1 var(--f-display);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.stat span{font-size:.88rem;color:var(--muted)}
+
+/* ---------- Street strip ---------- */
+.street{position:relative;height:110px;background:var(--asphalt);overflow:hidden;margin-top:56px}
+.lane{position:absolute;left:0;right:0;top:28px;height:54px;background:var(--lane);opacity:.92}
+.lane::before,.lane::after{content:"";position:absolute;left:0;right:0;height:3px;background:repeating-linear-gradient(90deg,var(--paint) 0 34px,transparent 34px 56px)}
+.lane::before{top:-8px}.lane::after{bottom:-8px}
+.stencils{position:absolute;inset:28px 0 auto;height:54px;display:flex;gap:220px;padding-left:80px;color:var(--paint);opacity:.55}
+.stencils svg{width:58px;flex:none;margin-top:9px}
+.rider{position:absolute;top:22px;left:0;width:96px;color:var(--paint);animation:ride 11s linear infinite}
+.rider .spin{transform-box:fill-box;transform-origin:center;animation:spin .7s linear infinite}
+@keyframes ride{from{transform:translateX(-120px)}to{transform:translateX(calc(100vw + 40px))}}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ---------- Night flow map ---------- */
+.flowsec{background:var(--night);color:var(--night-ink)}
+.flowsec .eyebrow{color:var(--gain)}
+.flowsec .sec-head p{color:var(--night-muted)}
+.flowgrid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,.75fr);gap:36px;align-items:start}
+.mapbox{position:relative;border-radius:22px;overflow:hidden;background:var(--night);border:1px solid var(--night-edge);max-width:100%}
+.mapbox svg,.mapbox canvas{display:block;width:100%;height:auto}
+.mapbox canvas{position:absolute;inset:0;width:100%;height:100%}
+.basemap .nj,.basemap .boro{fill:var(--night-land);stroke:var(--night-edge);stroke-width:1.2}
+.basemap .lbl{font:700 15px var(--f-display);fill:var(--night-muted);letter-spacing:.16em;text-transform:uppercase;opacity:.7}
+.maphour{position:absolute;left:18px;top:14px;font:800 clamp(1.8rem,4vw,2.8rem)/1 var(--f-display);color:var(--night-ink);text-shadow:0 2px 18px var(--night);font-variant-numeric:tabular-nums;pointer-events:none}
+.maphour small{display:block;font:500 .72rem/1.6 var(--f-mono);letter-spacing:.12em;color:var(--night-muted);text-transform:uppercase}
+.side{display:grid;gap:22px;min-width:0}
+.controls{display:flex;align-items:center;gap:12px}
+.play{width:46px;height:46px;border-radius:50%;border:none;background:var(--gain);color:var(--night);display:grid;place-items:center;cursor:pointer;flex:none}
+.play svg{width:18px;height:18px}
+.range{flex:1;min-width:0;accent-color:var(--gain)}
+.bars{display:grid;grid-template-columns:repeat(24,1fr);align-items:end;gap:3px;height:92px}
+.bars button{border:none;padding:0;background:var(--night-edge);border-radius:3px 3px 0 0;cursor:pointer;min-height:3px;transition:background .25s}
+.bars button.on{background:var(--route)}
+.bars-axis{display:flex;justify-content:space-between;font:500 .7rem/1 var(--f-mono);color:var(--night-muted);margin-top:6px}
+.legend{display:grid;gap:9px;font-size:.9rem;color:var(--night-muted)}
+.legend span{display:flex;align-items:center;gap:10px}
+.legend i{width:12px;height:12px;border-radius:50%;flex:none}
+.legend i.line{height:3px;border-radius:2px;width:22px}
+.movers{display:grid;gap:10px;border-top:1px solid var(--night-edge);padding-top:18px}
+.mover{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;font-size:.92rem}
+.mover .tag{font:600 .66rem/1 var(--f-mono);letter-spacing:.08em;padding:5px 7px;border-radius:999px}
+.mover .tag.l{background:rgba(240,86,62,.16);color:var(--lose)}
+.mover .tag.g{background:rgba(60,203,127,.16);color:var(--gain)}
+.mover b{font:600 .85rem/1 var(--f-mono);font-variant-numeric:tabular-nums}
+.mover span{overflow-wrap:anywhere}
+.note{font-size:.8rem;color:var(--night-muted)}
+
+/* ---------- Finding ---------- */
+.finding{display:grid;grid-template-columns:.9fr 1.1fr;gap:48px;align-items:start}
+.finding > *{min-width:0}
+.bignum{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap}
+.bignum b{font:800 clamp(4rem,10vw,6.5rem)/.85 var(--f-display);color:var(--empty);letter-spacing:-.04em;font-variant-numeric:tabular-nums}
+.bignum span{font-size:1rem;color:var(--muted);max-width:18ch;padding-bottom:6px}
+.trend{display:flex;flex-wrap:wrap;align-items:center;gap:10px;font:600 .9rem/1 var(--f-mono);color:var(--muted);margin-top:18px}
+.trend .arrow{color:var(--empty)}
+.story{display:grid;gap:18px}
+.story p{max-width:46ch}
+.groups{display:grid;grid-template-columns:1fr 1fr;gap:22px 32px}
+.group h3{font-size:.98rem;display:flex;justify-content:space-between;gap:8px;align-items:baseline;border-bottom:1px solid var(--line);padding-bottom:8px;margin-bottom:6px}
+.group h3 span{font:500 .72rem/1 var(--f-mono);color:var(--muted);letter-spacing:.04em;white-space:nowrap}
+.st{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:5px 0}
+.st-name{font-weight:500;font-size:.92rem;overflow-wrap:anywhere}
+.docks{display:flex;gap:2px;align-items:center}
+.docks i{width:4px;height:11px;border-radius:2px;border:1.2px solid var(--empty);opacity:.85}
+.docks em{font:500 .7rem/1 var(--f-mono);color:var(--muted);font-style:normal;margin-left:6px;min-width:3.4em;text-align:right;font-variant-numeric:tabular-nums}
+.footnote{font-size:.82rem;color:var(--muted);margin-top:4px;max-width:60ch}
+
+/* ---------- Pipeline ---------- */
+.pipe-scroll{overflow-x:auto;padding-bottom:6px}
+.pipe{display:block;min-width:900px;width:100%;height:auto}
+.pipe text{font-family:var(--f-body);fill:var(--ink)}
+.pipe .sub{fill:var(--muted);font-family:var(--f-mono)}
+.pipe .node{fill:var(--surface);stroke:var(--lane);stroke-width:1.8}
+.pipe .store{fill:var(--lane-soft);stroke:var(--lane);stroke-width:1.8}
+.pipe .edge{fill:none;stroke:var(--line);stroke-width:3}
+.pipe .dot{fill:var(--lane)}
+.pipe .dot.b{fill:var(--empty)}
+.pipe .lanelbl{font:600 11px var(--f-mono);letter-spacing:.12em;fill:var(--muted)}
+
+/* ---------- Decisions ---------- */
+.decisions{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:18px;overflow:hidden}
+.dec{background:var(--surface);padding:24px;display:grid;gap:12px;align-content:start;min-width:0}
+.dec .q{font:600 .7rem/1.3 var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--empty)}
+.dec p{color:var(--muted);font-size:.95rem}
+.dec code{font-family:var(--f-mono);font-size:.85em;background:var(--lane-soft);color:var(--ink);padding:1px 6px;border-radius:5px;overflow-wrap:anywhere}
+
+/* ---------- Route ---------- */
+.route{list-style:none;margin:0;padding:0;position:relative;display:grid;grid-template-columns:1fr 1fr;gap:0 48px}
+.stop{display:grid;grid-template-columns:36px minmax(0,1fr);gap:16px;align-items:start;padding:12px 0;position:relative}
+.stop::before{content:"";position:absolute;left:15px;top:0;bottom:0;width:6px;background:var(--lane);opacity:.35}
+.route li:first-child::before,.route li:nth-child(7)::before{top:24px}
+.route li:nth-child(6)::before,.route li:last-child::before{bottom:calc(100% - 24px)}
+.dot{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:var(--lane);color:var(--on-lane);position:relative;z-index:1;font:600 .78rem/1 var(--f-mono)}
+.stop h3{font-size:1.05rem;margin-top:6px}
+.stop p{font-size:.9rem;color:var(--muted);margin-top:3px}
+
+/* ---------- Run ---------- */
+.run{display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:start}
+.run > *{min-width:0}
+.cmds{display:grid;gap:8px}
+.cmd{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 10px 10px 14px;min-width:0}
+.cmd code{flex:1;min-width:0;overflow-x:auto;white-space:nowrap;font:500 .85rem/1.4 var(--f-mono)}
+.cmd .why{font-size:.8rem;color:var(--muted);white-space:nowrap}
+.copy{font:600 .75rem/1 var(--f-body);padding:8px 11px;border-radius:999px;border:1px solid var(--line);background:var(--paper);color:var(--ink);cursor:pointer}
+.stack{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+.chip{font:500 .8rem/1 var(--f-mono);padding:8px 11px;border-radius:999px;border:1px solid var(--line);background:var(--surface)}
+
+footer{border-top:1px solid var(--line);padding-block:32px 48px;color:var(--muted);font-size:.88rem;display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px}
+
+@media (max-width:960px){
+  .hero,.finding,.run,.flowgrid{grid-template-columns:1fr}
+  .decisions{grid-template-columns:1fr 1fr}
+  .stats{grid-template-columns:1fr 1fr}
+  .stat:nth-child(2){border-right:none}
+  .stat:nth-child(-n+2){border-bottom:1px solid var(--line)}
+}
+@media (max-width:620px){
+  section{padding-block:54px}
+  .decisions,.groups,.route{grid-template-columns:1fr}
+  .route li:nth-child(7)::before{top:0}
+  .route li:nth-child(6)::before{bottom:0}
+  .cmd .why{display:none}
+  .rack{gap:7px}
+}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}.rider{transform:translateX(40vw)}}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="bike" viewBox="0 0 64 40">
+      <g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="14" cy="27" r="10"/><circle cx="50" cy="27" r="10"/>
+        <path d="M14 27 L25 12 L44 12 L50 27 M25 12 L32 27 L44 12 M32 27 H14 M25 12 L23 6 M19 6 H28 M44 12 L42 5 M39 5 H46"/>
+      </g>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="wrap">
+  <header class="hero">
+    <div>
+      <div class="brand"><svg aria-hidden="true"><use href="#bike"/></svg>dockwatch</div>
+      <div class="eyebrow">An end to end data pipeline on NYC bike share</div>
+      <h1 style="margin-top:14px">Where did all the <em>bikes</em> go?</h1>
+      <p class="lede">Every minute I stream the status of <b>every bike share station in NYC and Jersey City</b>, load every ride from the monthly trip files, and model where bikes pile up and where they run out.</p>
+      <div class="cta">
+        <a class="btn primary" href="https://github.com/Eeshapandit/dockwatch" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.78 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.7 5.4-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/></svg>
+          View the code
+        </a>
+        <a class="btn" href="#flows">Watch the city move</a>
+      </div>
+    </div>
+
+    <div class="dock" aria-label="Illustration of a station rack draining during the morning">
+      <div class="dock-top">
+        <div>
+          <div class="dock-name">A station in Jackson Heights</div>
+          <div class="dock-sub">15 docks · weekday morning</div>
+        </div>
+        <div class="clock" id="clock">7:00</div>
+      </div>
+      <div class="rack" id="rack"></div>
+      <div class="meter">
+        <div><b id="bikesLeft">15</b> <span class="muted">bikes left</span></div>
+        <span class="pill" id="dockPill">PLENTY</span>
+      </div>
+      <p class="illus">Illustration of the pattern, not a recording of one station.</p>
+    </div>
+  </header>
+
+  <div class="stats" id="stats" role="list"></div>
+</div>
+
+<div class="street" aria-hidden="true">
+  <div class="lane"></div>
+  <div class="stencils" id="stencils"></div>
+  <svg class="rider" viewBox="0 0 96 64">
+    <g fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">
+      <g class="spin"><circle cx="20" cy="46" r="13"/><path d="M20 33 V59 M7 46 H33"/></g>
+      <g class="spin"><circle cx="74" cy="46" r="13"/><path d="M74 33 V59 M61 46 H87"/></g>
+      <path d="M20 46 L36 26 L62 26 L74 46 M36 26 L46 46 L62 26 M46 46 H20 M36 26 L33 18 M28 18 H39 M62 26 L59 15 M55 15 H64"/>
+      <path d="M35 17 L48 4 L60 14 M48 4 L46 30 L52 40" stroke-width="4"/>
+    </g>
+    <circle cx="52" cy="2" r="5.5" fill="currentColor"/>
+  </svg>
+</div>
+
+<section class="flowsec" id="flows">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">A weekday, hour by hour</span>
+      <h2>Watch the city move</h2>
+      <p id="flowIntro">Every ride from the monthly trip files, replayed as an average weekday. Orange lines are the busiest routes. Red stations lose bikes that hour, green stations gain them.</p>
+    </div>
+    <div class="flowgrid">
+      <div class="mapbox" id="mapbox">
+        <svg class="basemap" id="basemap" role="img" aria-label="Map of New York City and Jersey City"></svg>
+        <canvas id="flowCanvas" aria-hidden="true"></canvas>
+        <div class="maphour"><small id="mapKicker">Weekday</small><span id="mapHour">8 AM</span></div>
+      </div>
+      <div class="side">
+        <div class="controls" id="controls">
+          <button class="play" id="play" type="button" aria-label="Pause">
+            <svg viewBox="0 0 24 24" fill="currentColor" id="playIcon"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg>
+          </button>
+          <input class="range" id="hour" type="range" min="0" max="23" value="8" aria-label="Hour of day">
+        </div>
+        <div id="barsWrap">
+          <div class="bars" id="bars" aria-label="Average weekday rides started per hour"></div>
+          <div class="bars-axis"><span>12 AM</span><span>6 AM</span><span>12 PM</span><span>6 PM</span><span>11 PM</span></div>
+        </div>
+        <div class="legend">
+          <span><i class="line" style="background:var(--route)"></i><span id="legendRoute">Busiest routes this hour</span></span>
+          <span><i style="background:var(--lose)"></i>Station losing bikes (more rides start than end)</span>
+          <span><i style="background:var(--gain)"></i>Station gaining bikes</span>
+        </div>
+        <div class="movers" id="movers"></div>
+        <p class="note" id="flowNote"></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="wrap">
+  <section id="finding">
+    <div class="sec-head">
+      <span class="eyebrow">The first finding, from the live stream</span>
+      <h2>Bikes ride into Manhattan, and stay there</h2>
+      <p>Morning commuters pick up bikes near home and dock them near work. By midday the residential stations are drained, and they stay empty until people ride home.</p>
+    </div>
+    <div class="finding">
+      <div class="story">
+        <div>
+          <div class="bignum"><b>171</b><span>stations with zero bikes at noon on Wednesday, Oct 21</span></div>
+          <div class="trend"><span>151 at 11:24</span><span class="arrow">→</span><span>171 at 12:02</span><span class="arrow">▲ 20 in 38 min</span></div>
+        </div>
+        <p class="muted">These 15 sat empty for the entire 30 minute window. Each mark is one dock, and every one is empty. The pattern is the commute: residential Queens, the Bronx and upper Manhattan drain into Midtown.</p>
+        <p class="footnote">Many more stations tied at the full 30 minutes. These are the first 15 alphabetically.</p>
+      </div>
+      <div class="groups" id="groups"></div>
+    </div>
+  </section>
+
+  <section id="how">
+    <div class="sec-head">
+      <span class="eyebrow">How it works</span>
+      <h2>Two lanes into one warehouse</h2>
+      <p>A streaming lane for live dock status, a batch lane for monthly ride history, and dbt turning both into tested answers.</p>
+    </div>
+    <div class="pipe-scroll">
+      <svg class="pipe" viewBox="0 0 1100 330" role="img" aria-label="Pipeline: live feed to producer to Redpanda to consumer to Postgres; trip files to Airflow to Parquet to Postgres; Postgres to dbt to dashboard and this page">
+        <text class="lanelbl" x="20" y="28">STREAMING · EVERY 60 SECONDS</text>
+        <text class="lanelbl" x="20" y="318">BATCH · MONTHLY, ORCHESTRATED BY AIRFLOW</text>
+
+        <path id="s1" class="edge" d="M150 80 H190"/><path id="s2" class="edge" d="M320 80 H360"/><path id="s3" class="edge" d="M490 80 H530"/>
+        <path id="s4" class="edge" d="M660 80 C690 80 690 165 720 165"/>
+        <path id="b1" class="edge" d="M150 260 H190"/><path id="b2" class="edge" d="M320 260 H360"/><path id="b3" class="edge" d="M490 260 H530"/>
+        <path id="b4" class="edge" d="M660 260 C690 260 690 165 720 165"/>
+        <path id="m1" class="edge" d="M850 165 H880"/><path id="m2" class="edge" d="M1010 150 C1030 150 1030 95 1050 95"/><path id="m3" class="edge" d="M1010 180 C1030 180 1030 235 1050 235"/>
+        <g id="pipeDots"></g>
+
+        <rect class="node" x="20" y="45" width="130" height="70" rx="14"/><text x="85" y="76" text-anchor="middle" font-size="14" font-weight="700">Live feed</text><text class="sub" x="85" y="96" text-anchor="middle" font-size="10">GBFS JSON</text>
+        <rect class="node" x="190" y="45" width="130" height="70" rx="14"/><text x="255" y="76" text-anchor="middle" font-size="14" font-weight="700">Producer</text><text class="sub" x="255" y="96" text-anchor="middle" font-size="10">real changes only</text>
+        <rect class="node" x="360" y="45" width="130" height="70" rx="14"/><text x="425" y="76" text-anchor="middle" font-size="14" font-weight="700">Redpanda</text><text class="sub" x="425" y="96" text-anchor="middle" font-size="10">Kafka topics</text>
+        <rect class="node" x="530" y="45" width="130" height="70" rx="14"/><text x="595" y="76" text-anchor="middle" font-size="14" font-weight="700">Consumer</text><text class="sub" x="595" y="96" text-anchor="middle" font-size="10">exactly once</text>
+
+        <rect class="node" x="20" y="225" width="130" height="70" rx="14"/><text x="85" y="256" text-anchor="middle" font-size="14" font-weight="700">Trip files</text><text class="sub" x="85" y="276" text-anchor="middle" font-size="10">monthly zip</text>
+        <rect class="node" x="190" y="225" width="130" height="70" rx="14"/><text x="255" y="256" text-anchor="middle" font-size="14" font-weight="700">Extract</text><text class="sub" x="255" y="276" text-anchor="middle" font-size="10">2 schemas → 1</text>
+        <rect class="node" x="360" y="225" width="130" height="70" rx="14"/><text x="425" y="256" text-anchor="middle" font-size="14" font-weight="700">Parquet</text><text class="sub" x="425" y="276" text-anchor="middle" font-size="10">typed, compressed</text>
+        <rect class="node" x="530" y="225" width="130" height="70" rx="14"/><text x="595" y="256" text-anchor="middle" font-size="14" font-weight="700">Load month</text><text class="sub" x="595" y="276" text-anchor="middle" font-size="10">atomic replace</text>
+
+        <rect class="store" x="720" y="125" width="130" height="80" rx="14"/><text x="785" y="160" text-anchor="middle" font-size="15" font-weight="700">Postgres</text><text class="sub" x="785" y="180" text-anchor="middle" font-size="10">raw layer</text>
+        <rect class="store" x="880" y="125" width="130" height="80" rx="14"/><text x="945" y="160" text-anchor="middle" font-size="15" font-weight="700">dbt</text><text class="sub" x="945" y="180" text-anchor="middle" font-size="10">11 models · 20 tests</text>
+        <rect class="node" x="1050" y="65" width="40" height="60" rx="10"/><text x="1070" y="100" text-anchor="middle" font-size="18">📊</text>
+        <rect class="node" x="1050" y="205" width="40" height="60" rx="10"/><text x="1070" y="240" text-anchor="middle" font-size="18">🌐</text>
+      </svg>
+    </div>
+    <p class="muted" style="font-size:.9rem;margin-top:10px">📊 Streamlit dashboard · 🌐 this page, exported from the dbt marts</p>
+  </section>
+
+  <section id="decisions">
+    <div class="sec-head">
+      <span class="eyebrow">Design decisions</span>
+      <h2>Every choice has a reason</h2>
+      <p>Each one came from a real problem in the data.</p>
+    </div>
+    <div class="decisions">
+      <div class="dec"><span class="q">Rerunning a load</span><h3>Idempotent by design</h3><p>A composite key <code>(station_id, last_reported)</code> plus <code>on conflict do nothing</code>. A rerun inserts exactly 0 rows.</p></div>
+      <div class="dec"><span class="q">Fake 1970 timestamps</span><h3>Fix the cause</h3><p>54 stations reported Jan 2, 1970. The real reason was <code>is_installed = false</code>, so that is what the filter checks.</p></div>
+      <div class="dec"><span class="q">1,700 rows a minute</span><h3>Duplicate ≠ redundant</h3><p>Stations send heartbeats when nothing changed. The producer compares each station's state and only sends real changes.</p></div>
+      <div class="dec"><span class="q">Crash mid batch</span><h3>Exactly once, in effect</h3><p>The consumer commits Kafka offsets only after the database transaction. Replays are harmless because every insert is idempotent.</p></div>
+      <div class="dec"><span class="q">Two CSV schemas</span><h3>Normalize at the edge</h3><p>Pre 2021 files use different columns and no ride id. One function maps both, so nothing downstream cares which year it is.</p></div>
+      <div class="dec"><span class="q">Reloading a month</span><h3>Atomic replace</h3><p>Delete the month and insert it again in one transaction. Readers never see half a month, and Airflow can retry safely.</p></div>
+      <div class="dec"><span class="q">Snapshots, not durations</span><h3>Spells with LEAD()</h3><p>Each stored state lasts until the station's next row. Spells are split at hour boundaries to get minutes empty per hour.</p></div>
+      <div class="dec"><span class="q">Two kinds of station id</span><h3>Join on the right key</h3><p>Trip files use the station's <code>short_name</code>, not the live feed's <code>station_id</code>. Locations come from ride coordinates, by median.</p></div>
+      <div class="dec"><span class="q">Pipeline outages</span><h3>No invented spells</h3><p>Open spells end where the data ends, and none lasts over 12 hours, so a laptop going to sleep can't fake a 3 day empty station.</p></div>
+    </div>
+  </section>
+
+  <section id="log">
+    <div class="sec-head">
+      <span class="eyebrow">Build log</span>
+      <h2>The route, start to finish</h2>
+      <p>One concept per stop. Each one is a commit in the repo.</p>
+    </div>
+    <ol class="route" id="route"></ol>
+  </section>
+
+  <section id="run">
+    <div class="run">
+      <div class="sec-head" style="margin-bottom:0">
+        <span class="eyebrow">Run it yourself</span>
+        <h2>One command</h2>
+        <p>Runs in GitHub Codespaces with nothing installed locally. Every push is tested by GitHub Actions: unit tests plus a full dbt build on a throwaway database.</p>
+        <div class="stack">
+          <span class="chip">Python</span><span class="chip">Redpanda (Kafka)</span><span class="chip">PostgreSQL</span><span class="chip">Airflow</span><span class="chip">dbt</span><span class="chip">Parquet</span><span class="chip">Docker</span><span class="chip">Streamlit</span><span class="chip">GitHub Actions</span>
+        </div>
+      </div>
+      <div class="cmds" id="cmds"></div>
+    </div>
+  </section>
+</div>
+
+<div class="wrap">
+  <footer>
+    <span>Built by <a href="https://www.linkedin.com/in/eesha-pandit-ba61751b9" target="_blank" rel="noopener">Eesha Pandit</a></span>
+    <span id="credits">Live data from the public GBFS feed, rides from the public System Data trip files. Map: NYC borough boundaries (NYC Open Data) and Census ZIP areas for New Jersey. Independent project, not affiliated with any bike share operator.</span>
+  </footer>
+</div>
+
+<script>
+const BASEMAP = {"w":1000,"h":1200.2,"lon0":-74.085,"lat1":40.885,"c":0.7574510447772038,"k":4800.790310393389,"nj":"M59.7 1064.2L55.0 1070.0L55.4 1072.2L51.5 1079.1L23.9 1068.4L21.5 1073.5L2.5 1065.1L4.8 1060.2L0.0 1057.9L0.0 0.0L556.1 0.0L499.0 122.2L478.2 172.8L443.0 278.9L425.2 308.7L400.4 356.2L363.9 420.0L337.4 405.1L336.7 408.1L328.4 415.5L337.4 419.4L338.4 421.6L335.1 428.8L326.9 427.6L332.5 432.8L329.9 435.2L330.5 439.2L328.7 442.1L322.5 442.7L321.3 448.1L322.9 450.3L316.1 448.5L315.6 453.3L320.5 456.9L320.5 459.2L318.3 458.3L315.7 462.0L316.5 464.2L314.8 464.1L308.1 474.6L300.1 490.2L297.9 492.8L295.4 492.2L292.3 498.7L289.9 501.0L287.2 499.6L284.0 504.6L292.9 511.1L292.3 512.5L282.7 507.2L281.3 509.2L290.4 515.5L280.6 510.4L275.6 518.4L271.3 516.5L269.6 518.8L270.2 520.6L266.9 522.9L271.0 526.1L269.2 530.0L274.1 533.3L273.0 537.1L262.5 546.8L257.6 547.1L255.9 552.7L252.7 555.0L254.0 557.0L246.6 569.0L248.1 570.8L246.9 574.3L248.4 578.9L244.2 584.0L239.5 583.7L235.4 591.2L244.7 597.5L242.5 598.4L235.0 593.0L233.5 594.4L241.5 600.3L232.6 596.4L228.6 603.2L239.1 610.4L227.7 604.9L224.2 612.1L210.6 614.0L210.8 621.5L221.3 624.9L220.8 627.5L224.9 621.3L224.7 625.1L235.2 627.5L234.8 629.1L224.4 626.9L223.5 630.1L234.2 632.5L233.6 634.9L226.4 633.1L225.4 634.7L234.6 637.0L233.0 639.3L225.6 637.6L224.0 642.1L223.9 645.7L225.7 646.2L224.3 652.0L228.2 653.3L227.6 655.5L223.2 655.1L226.9 665.4L226.8 670.9L224.4 678.4L219.8 680.9L217.3 689.3L213.3 692.4L222.0 694.8L221.1 698.7L212.4 696.5L211.5 700.4L221.6 702.9L221.4 704.6L211.2 702.1L210.3 708.0L218.8 709.9L217.6 713.9L208.7 712.2L208.4 714.4L214.2 715.8L211.6 721.5L215.8 726.1L203.0 724.6L202.6 726.6L198.1 726.4L225.9 739.0L204.7 738.9L207.4 739.3L206.3 742.4L211.4 746.7L195.2 743.4L196.3 748.6L212.6 750.6L212.3 753.2L196.0 750.9L195.7 752.9L209.3 754.8L209.1 756.2L198.7 755.0L198.1 759.3L199.9 760.8L198.9 762.8L183.9 762.2L183.3 766.6L185.9 768.0L202.0 769.9L201.7 774.0L186.1 772.4L184.6 781.4L195.1 783.1L194.0 791.2L191.3 791.0L191.1 793.0L202.8 794.7L202.4 797.4L190.8 795.5L189.5 804.0L200.4 805.8L200.0 807.8L192.1 806.8L188.8 815.1L188.7 825.3L186.4 832.1L182.9 831.5L180.2 833.7L173.5 832.5L169.2 834.8L168.8 842.0L182.8 844.0L185.5 846.2L183.5 849.7L185.5 851.4L184.7 856.2L182.9 856.0L181.7 860.9L152.6 857.4L152.1 861.3L156.5 864.3L154.1 867.9L151.5 867.2L149.1 869.6L136.4 887.3L130.2 883.5L128.4 884.6L125.6 891.4L130.7 895.8L124.0 906.2L122.7 907.4L116.9 904.3L106.5 915.5L106.0 921.0L112.9 928.2L111.8 927.5L109.8 933.0L98.6 926.8L99.8 922.4L89.6 914.8L88.4 918.7L85.6 917.5L87.0 912.0L71.9 901.6L69.2 897.5L65.5 905.5L60.7 903.1L56.5 908.0L52.8 913.9L55.8 917.0L55.1 914.9L57.1 912.0L64.0 909.3L70.3 913.3L58.0 924.9L56.1 950.8L87.3 983.7L78.9 993.4L56.8 973.0L55.1 967.4L52.2 969.9L18.4 941.3L18.2 941.5L17.6 945.4L51.7 977.1L52.3 980.9L47.6 985.3L41.9 985.0L34.5 996.3L45.1 1004.1L43.7 1006.3L32.9 999.1L29.6 1005.8L14.2 996.4L13.9 1001.9L73.2 1036.3L68.3 1049.3L63.7 1054.5L59.7 1064.2ZM159.7 885.6L165.9 882.1L173.3 890.1L171.1 895.0L165.9 897.0L158.9 890.4L157.5 892.0L163.9 898.9L157.5 905.0L150.0 896.9L159.7 885.6ZM165.1 885.6L162.3 885.9L164.9 891.6L163.1 891.6L166.5 893.6L170.3 892.5L165.1 885.6Z","boros":{"Staten Island":"M0.0 1133.4L21.8 1137.1L30.9 1142.7L38.4 1151.9L41.5 1152.2L40.5 1150.2L42.4 1148.4L41.1 1150.7L45.1 1153.2L44.7 1154.9L48.5 1152.0L46.2 1155.7L49.2 1160.4L51.1 1160.1L46.9 1164.4L53.3 1164.1L42.8 1165.7L43.1 1167.3L53.8 1166.6L43.3 1168.3L44.0 1171.8L54.6 1171.1L44.2 1172.3L43.3 1182.8L45.9 1185.0L41.9 1186.8L41.9 1189.5L52.6 1188.3L52.7 1189.8L42.1 1191.1L46.9 1191.9L42.3 1192.8L43.4 1200.2L0.0 1200.2L0.0 1133.4Z","Queens":"M962.2 405.0L964.3 403.3L986.6 419.8L986.5 422.1L987.6 419.1L987.3 422.2L988.9 420.3L989.5 421.7L991.7 417.1L993.5 417.5L994.1 420.7L1000.0 422.0L1000.0 1160.3L969.4 1145.2L956.8 1128.2L951.0 1102.4L954.7 1084.2L957.5 1080.0L968.4 1074.9L990.5 1079.4L995.5 1077.6L968.5 1069.9L951.9 1078.6L948.8 1087.4L945.5 1102.1L952.3 1137.8L946.7 1129.6L945.5 1131.2L943.7 1128.7L942.3 1130.7L941.3 1127.8L940.5 1136.2L932.6 1132.4L923.9 1120.4L921.4 1110.2L930.9 1098.9L925.7 1101.7L925.1 1105.1L921.1 1109.3L919.2 1106.8L921.8 1104.3L923.1 1099.8L929.5 1097.0L931.0 1093.6L930.3 1090.7L926.8 1087.8L928.3 1087.4L928.7 1086.6L926.7 1081.1L928.4 1086.6L926.4 1088.1L930.6 1093.0L929.1 1096.3L922.7 1099.4L920.5 1104.7L919.3 1104.7L916.7 1092.3L920.2 1098.6L917.8 1090.6L923.7 1088.7L915.0 1089.5L923.3 1135.5L921.2 1137.9L907.2 1135.8L895.3 1075.0L898.0 1070.5L895.5 1068.4L891.0 1071.0L905.7 1149.8L856.3 1156.3L847.9 1148.1L845.8 1140.7L848.8 1132.5L851.3 1132.2L852.4 1126.6L857.2 1123.2L856.7 1121.3L851.7 1120.8L845.4 1125.5L833.0 1121.9L830.1 1114.7L824.4 1113.8L820.7 1104.3L813.2 1097.4L818.8 1094.7L819.5 1087.6L817.3 1085.5L814.6 1087.9L816.0 1083.4L813.6 1086.3L814.7 1089.5L819.0 1088.4L816.1 1090.6L816.9 1093.4L815.0 1095.0L812.3 1094.6L812.0 1089.7L808.4 1091.6L806.7 1088.5L816.9 1081.9L826.9 1079.6L823.9 1063.6L833.9 1061.6L826.8 1024.2L816.8 1026.1L809.7 988.2L806.2 988.6L803.3 972.8L796.3 975.0L786.6 916.8L787.5 913.5L785.8 911.4L767.2 916.0L747.2 930.6L731.7 946.4L729.0 952.1L710.4 963.8L708.5 960.1L699.9 967.7L693.9 958.8L685.6 972.9L668.5 946.3L671.2 944.9L666.2 932.5L668.2 929.2L651.7 916.3L657.2 908.8L629.8 888.4L633.9 883.1L625.8 876.8L629.8 871.7L593.1 843.0L597.3 837.6L594.4 835.1L591.9 826.4L585.3 820.9L586.6 820.5L585.0 815.5L591.5 811.0L597.9 811.3L591.9 809.5L585.7 796.7L584.6 785.3L581.3 781.0L583.9 774.9L597.3 776.2L598.7 774.5L582.2 770.5L566.4 752.5L547.2 748.4L534.4 741.7L530.5 737.5L527.0 726.1L521.4 716.1L505.7 708.1L522.0 699.7L532.4 682.0L527.2 680.7L526.7 682.5L528.5 683.0L523.0 694.7L517.4 700.4L501.3 706.2L477.1 697.0L463.9 698.2L451.9 705.3L446.7 704.4L445.0 700.8L446.5 696.1L450.0 694.5L447.6 691.9L450.1 690.8L450.5 687.3L448.9 686.5L450.2 683.4L452.7 679.3L455.3 679.3L455.5 677.4L452.2 676.3L455.9 677.2L456.8 675.6L455.5 675.6L454.0 675.1L454.1 674.8L459.0 674.2L456.5 673.8L459.5 672.4L455.8 671.1L460.0 672.2L457.0 669.5L460.4 668.7L458.2 667.0L466.2 653.7L479.3 659.0L479.8 657.3L467.7 652.7L470.0 650.0L468.4 649.6L471.5 648.0L472.5 649.9L476.4 639.5L514.5 578.5L527.9 561.8L531.1 561.9L533.8 558.2L538.9 557.4L545.8 551.9L545.4 546.5L547.3 545.8L545.6 545.5L547.5 545.1L536.5 539.9L535.2 535.0L535.8 527.7L540.4 518.9L545.2 514.0L549.4 513.1L557.1 514.3L564.1 522.2L568.7 520.4L584.6 508.4L603.3 487.9L610.3 484.0L611.5 479.2L617.2 474.4L616.0 473.2L626.9 459.1L628.3 460.0L636.9 451.5L671.5 460.8L687.5 477.0L687.9 479.0L677.3 490.7L668.6 491.1L664.8 495.5L663.3 502.7L668.0 495.2L677.6 494.5L693.2 483.7L687.0 488.9L691.7 493.3L689.4 495.8L689.6 496.1L692.4 493.3L689.7 496.5L693.9 492.2L698.0 495.2L700.7 492.2L699.1 489.8L703.1 493.5L700.9 492.5L698.1 495.5L703.0 500.0L699.9 506.2L703.0 506.5L704.7 511.0L699.9 516.5L703.9 521.7L702.4 528.7L705.0 517.9L708.8 514.7L711.0 525.5L708.4 534.6L711.1 535.1L724.3 532.8L724.2 532.4L724.8 532.3L724.8 530.8L725.0 532.4L724.4 532.8L731.2 532.3L727.9 528.3L729.9 525.8L726.4 510.7L727.7 504.1L746.9 500.0L750.2 501.3L748.0 495.2L749.6 492.6L746.4 490.5L746.5 490.2L749.7 492.4L751.5 489.6L763.1 496.8L777.3 475.1L782.6 478.5L788.7 468.3L789.5 468.7L782.3 479.7L783.9 486.6L786.9 485.8L787.3 486.5L783.9 486.8L772.5 500.1L836.2 541.6L831.1 550.6L824.7 550.5L831.8 557.4L828.9 556.2L820.5 566.1L815.1 566.8L814.2 565.2L808.2 567.6L820.0 587.8L822.1 589.9L823.1 588.0L822.4 590.2L826.7 585.3L823.6 583.9L824.2 583.0L826.8 585.2L829.2 580.5L830.3 581.2L827.0 585.3L830.6 587.0L826.9 585.4L824.8 588.6L830.5 592.2L824.7 588.7L823.3 590.9L835.6 596.2L837.6 599.3L851.1 602.9L857.1 598.9L855.0 594.8L847.0 598.2L855.2 594.0L859.7 599.2L877.5 582.8L879.7 582.9L881.0 577.9L889.0 574.2L892.4 574.9L894.1 571.3L892.0 569.4L892.4 566.0L889.8 569.9L874.6 573.9L862.5 567.6L858.1 555.9L859.6 553.0L856.3 554.4L855.4 552.4L859.2 551.6L859.4 548.4L854.8 542.8L853.3 543.7L849.8 543.4L854.7 542.7L858.3 535.0L858.3 513.6L854.8 510.0L855.9 506.6L851.1 508.6L849.1 508.9L855.2 505.9L846.0 506.6L846.0 508.1L845.9 506.3L856.1 504.7L848.4 504.7L856.4 503.8L854.9 498.9L851.1 498.7L855.0 498.7L855.1 496.4L857.5 496.2L856.2 495.2L857.3 493.3L835.3 494.6L834.7 489.0L831.1 488.1L830.4 490.2L829.7 487.9L825.2 486.2L825.5 481.6L819.9 477.5L821.9 477.7L825.0 470.2L829.8 472.0L832.9 467.2L844.2 464.7L837.1 462.8L838.3 454.8L844.9 450.7L840.8 444.9L841.1 436.8L844.5 435.0L845.0 432.3L848.8 436.5L858.0 439.9L859.2 430.1L868.2 426.5L874.2 432.5L878.0 432.5L878.9 429.7L880.6 431.0L879.0 426.4L880.7 430.1L882.7 429.3L880.5 422.8L883.0 429.1L885.1 430.1L886.2 426.2L890.4 423.0L889.4 419.2L898.5 415.2L890.0 419.6L891.0 422.9L896.7 423.6L901.6 437.6L903.5 447.7L899.5 451.1L900.0 453.9L902.5 453.8L900.1 454.0L900.8 460.8L901.3 458.2L906.7 458.1L912.2 460.6L913.4 463.2L916.6 463.2L922.0 460.0L919.5 455.9L922.3 449.5L933.2 444.6L930.1 441.6L933.5 444.0L934.8 442.3L934.5 432.4L929.2 423.3L936.7 423.5L939.1 418.6L944.9 420.8L951.2 415.7L950.3 414.0L951.2 415.7L951.6 413.0L954.2 413.3L953.5 411.3L954.5 412.9L954.1 410.9L955.0 412.3L962.1 405.1L961.7 403.2L962.2 405.0ZM951.4 1181.1L954.7 1200.2L920.1 1200.2L914.9 1183.4L919.2 1181.3L934.2 1196.0L943.7 1196.4L947.5 1194.4L948.6 1182.0L947.0 1179.3L948.4 1176.4L951.4 1181.1ZM821.9 1115.3L827.9 1122.2L829.2 1125.4L821.9 1115.3Z","Brooklyn":"M832.2 1199.8L866.6 1182.3L878.1 1193.0L875.6 1200.2L832.2 1199.8ZM475.3 700.4L503.6 710.9L501.1 718.4L501.6 723.0L503.3 722.8L502.1 718.6L503.2 716.0L507.0 712.4L509.1 713.2L508.4 717.8L510.9 714.0L518.6 718.1L523.1 724.2L528.2 739.0L537.8 748.0L566.4 756.6L571.4 764.0L579.6 791.8L582.5 790.9L583.3 796.2L581.8 799.9L567.7 803.1L564.7 806.3L565.6 812.7L555.6 816.3L559.1 822.3L554.0 825.5L556.2 832.5L551.7 835.4L556.7 833.7L562.3 846.3L558.0 831.2L560.8 829.8L557.8 830.4L556.9 827.8L562.1 824.9L560.5 816.6L569.3 813.6L567.6 808.4L570.1 806.0L583.1 802.0L586.8 805.0L588.9 809.7L582.2 814.9L584.2 820.3L591.9 826.4L594.4 835.1L597.3 837.6L593.1 843.0L629.8 871.7L625.8 876.8L633.9 883.1L629.8 888.4L657.2 908.8L651.7 916.3L668.2 929.2L666.2 932.5L671.2 944.9L668.5 946.3L685.6 972.9L693.9 958.8L699.9 967.7L708.5 960.1L710.4 963.8L729.0 952.1L731.7 946.4L747.2 930.6L767.2 916.0L785.8 911.4L787.5 913.5L786.6 916.8L796.3 975.0L803.3 972.8L806.2 988.6L809.7 988.2L816.8 1026.1L826.8 1024.2L833.9 1061.6L823.9 1063.6L826.9 1079.6L816.9 1081.9L806.7 1088.5L808.4 1091.6L806.3 1094.9L808.6 1101.0L814.6 1103.2L819.1 1108.5L829.2 1125.4L827.2 1128.2L824.0 1142.6L828.5 1158.5L807.7 1163.9L793.8 1176.1L798.7 1181.2L797.7 1182.0L786.6 1171.8L779.6 1152.9L772.5 1149.4L747.9 1106.0L746.5 1107.2L770.2 1150.1L769.9 1157.5L781.5 1176.9L782.2 1181.3L789.1 1185.2L783.2 1190.2L784.7 1188.4L783.4 1186.0L769.2 1194.0L755.7 1182.6L751.5 1181.6L743.7 1171.5L742.8 1168.7L744.4 1169.4L745.2 1166.6L740.4 1164.9L737.6 1158.2L733.0 1154.5L725.2 1156.8L718.4 1147.7L717.4 1138.4L714.0 1137.7L708.9 1131.5L707.8 1132.8L705.8 1131.2L705.1 1133.9L713.5 1147.1L711.2 1142.9L715.6 1141.9L714.0 1143.6L716.1 1144.4L715.3 1147.2L718.5 1150.6L716.5 1152.0L718.8 1151.1L722.8 1157.9L731.9 1164.4L747.1 1184.7L750.4 1184.4L750.4 1187.9L755.8 1195.5L754.6 1198.3L752.9 1200.2L168.1 1200.2L175.2 1181.1L168.4 1177.5L175.5 1180.3L179.2 1173.1L175.4 1168.5L185.2 1155.5L191.6 1159.0L190.8 1157.8L193.1 1157.5L198.1 1150.9L203.3 1155.1L203.1 1154.2L204.1 1152.8L203.3 1154.2L206.6 1155.0L206.5 1156.9L214.4 1146.1L200.9 1135.5L202.2 1133.9L215.6 1144.4L219.6 1141.9L213.7 1136.6L218.6 1140.6L221.3 1139.6L217.7 1136.2L216.2 1129.2L218.7 1125.3L214.4 1123.4L216.3 1121.1L219.0 1124.9L220.9 1122.7L216.7 1118.9L221.2 1122.5L226.0 1122.6L216.8 1115.1L230.8 1125.0L232.5 1122.9L227.9 1119.0L233.1 1122.2L222.5 1113.6L229.2 1117.5L232.0 1114.6L224.7 1108.5L230.4 1110.7L232.2 1108.0L230.4 1104.8L241.4 1111.4L243.2 1109.5L236.2 1102.6L244.1 1108.7L246.7 1105.3L237.4 1096.6L246.3 1103.2L249.5 1101.2L239.6 1092.8L241.4 1090.5L251.4 1098.4L253.0 1096.3L244.1 1088.3L254.4 1094.8L256.6 1091.7L245.6 1082.8L252.6 1076.5L266.0 1085.4L268.7 1081.6L258.1 1072.8L261.3 1070.7L277.8 1082.5L282.0 1077.5L271.4 1068.7L274.4 1064.5L277.5 1064.0L286.7 1071.3L288.4 1069.3L293.5 1073.2L286.4 1066.8L287.6 1065.3L295.2 1071.0L296.4 1069.4L287.3 1064.5L288.7 1063.6L281.2 1057.2L283.2 1056.6L285.4 1058.3L284.1 1059.3L287.8 1060.3L287.1 1061.7L288.2 1061.3L288.6 1058.4L288.5 1061.5L295.9 1067.0L296.7 1065.8L289.9 1057.8L291.4 1055.9L305.0 1066.2L310.8 1059.1L298.5 1049.2L306.6 1044.0L309.2 1044.4L312.6 1039.6L313.6 1024.5L308.0 1038.3L301.0 1039.0L298.6 1044.9L287.8 1041.8L284.2 1051.1L283.8 1051.1L291.8 1028.7L289.3 1027.7L281.6 1046.3L283.3 1038.9L273.3 1039.3L267.1 1055.8L251.8 1058.2L247.6 1056.9L244.0 1052.1L241.5 1030.3L238.8 1024.4L245.4 1027.2L249.1 1056.5L250.8 1056.8L251.1 1053.9L264.4 1052.7L271.5 1036.6L267.1 1033.2L266.8 1029.4L257.3 1033.5L266.4 1029.0L257.2 1025.5L253.8 1028.5L258.6 1023.1L257.3 1021.9L252.0 1027.2L261.9 1016.2L260.5 1014.9L254.1 1021.8L249.7 1018.2L256.1 1011.0L254.7 1009.7L243.0 1022.9L240.7 1021.4L246.3 1014.8L243.6 1013.4L244.2 1006.9L240.4 1007.7L244.0 1000.9L237.2 1000.4L236.5 998.1L239.7 997.9L239.4 994.6L242.1 994.2L242.1 991.8L237.6 991.9L242.7 991.1L241.5 989.0L238.0 989.1L239.0 985.9L262.5 966.8L265.0 970.2L257.8 975.9L261.8 982.2L273.9 968.5L269.9 963.2L265.7 965.5L280.1 954.0L287.7 954.4L298.3 934.1L305.6 935.5L306.5 933.2L301.9 927.3L302.8 924.6L311.0 904.0L313.2 902.9L319.1 887.5L328.5 871.7L327.3 870.6L328.8 867.1L337.7 865.6L338.7 868.5L342.0 868.8L344.6 864.5L351.6 866.3L352.9 863.5L358.1 864.2L358.4 862.5L369.3 861.1L378.5 862.4L378.5 859.8L385.3 859.5L384.6 861.5L386.1 860.0L386.6 862.0L387.7 859.5L386.0 859.0L387.8 859.3L387.2 864.7L392.0 867.9L390.9 872.8L392.2 873.7L396.5 865.5L393.0 874.7L395.8 877.7L398.8 874.0L396.3 878.8L401.6 880.5L397.3 890.2L403.2 881.9L409.5 887.3L404.5 880.8L406.6 880.1L415.3 888.2L406.1 876.6L407.9 875.0L418.8 887.0L420.0 885.7L407.9 872.1L420.9 881.6L421.9 879.8L409.8 869.7L414.2 871.5L414.5 869.8L401.3 859.0L402.2 857.8L405.5 860.8L408.9 858.4L401.3 851.3L402.8 849.6L414.2 860.1L414.3 854.8L408.2 845.7L409.7 844.5L417.2 855.1L417.5 864.5L427.2 871.6L427.4 869.2L420.7 863.7L420.8 854.1L418.4 843.4L419.8 838.7L418.1 838.0L423.7 826.6L422.4 824.7L428.1 806.6L435.8 795.6L435.0 791.7L438.3 791.8L443.8 782.4L448.5 768.8L446.9 767.4L462.0 769.8L460.3 766.2L454.1 766.6L453.5 763.6L448.7 764.0L450.9 750.0L446.2 724.7L455.2 710.2L460.7 705.1L465.7 701.5L475.3 700.4Z","Manhattan":"M648.5 44.4L644.6 58.3L640.2 61.7L633.0 52.1L615.3 44.6L628.9 33.0L630.9 28.7L635.2 28.6L647.1 38.9L648.5 44.4ZM576.9 35.6L577.5 38.1L583.4 36.3L591.3 39.5L590.5 50.9L595.4 57.2L598.0 57.6L600.8 54.7L597.1 51.9L595.7 47.3L596.8 45.8L604.1 49.7L602.6 54.5L605.5 56.7L608.8 50.2L607.7 53.3L615.7 50.3L627.3 54.1L632.1 57.7L634.8 64.9L633.0 74.7L631.0 74.6L632.5 76.6L627.1 88.7L622.1 97.2L618.5 98.0L620.3 100.0L614.9 99.3L617.5 101.1L616.8 105.2L609.8 112.0L602.0 125.5L594.2 119.7L593.2 123.9L596.6 129.0L597.7 129.5L598.2 128.5L598.7 128.8L591.4 136.4L591.5 140.7L593.8 136.0L594.5 136.3L564.7 190.9L545.8 238.9L544.9 251.2L549.7 313.4L547.9 362.2L550.7 371.6L562.5 389.9L567.1 402.9L566.3 428.0L562.9 434.0L542.4 450.8L537.9 459.1L541.4 461.2L537.6 460.1L534.1 469.6L527.9 478.8L515.5 488.1L513.2 498.0L515.6 507.4L517.4 506.3L518.1 508.4L516.8 510.7L520.0 522.4L516.6 529.6L474.8 589.6L457.5 610.4L414.8 674.6L415.6 677.0L413.2 677.7L414.2 678.5L411.3 683.0L408.5 699.8L409.1 716.3L402.1 713.3L403.5 714.7L401.9 714.0L403.1 715.5L401.8 715.8L407.1 719.3L408.1 717.7L407.5 719.8L405.3 720.4L402.0 718.6L405.8 738.0L412.8 747.7L412.8 756.8L405.4 798.0L393.8 832.8L389.1 837.4L377.2 839.1L377.3 841.0L351.3 844.3L349.8 840.3L316.1 847.3L304.8 855.2L305.5 857.3L304.0 858.5L307.0 862.1L303.9 864.8L299.7 861.6L301.9 865.4L300.3 865.7L297.0 861.1L295.9 862.1L298.3 865.3L295.8 862.1L292.4 865.2L296.4 869.9L291.6 865.9L290.2 866.9L291.2 867.9L289.6 867.5L293.6 873.7L288.5 868.4L285.1 870.5L289.8 875.9L289.1 876.5L284.4 871.0L275.2 878.8L277.5 882.7L280.9 880.7L278.7 884.9L274.2 879.2L268.5 881.1L269.8 887.2L268.5 883.8L266.8 885.9L265.1 884.9L265.6 888.0L264.0 885.2L263.2 887.6L261.4 885.7L261.4 889.2L258.4 883.4L257.4 887.6L257.1 885.1L255.7 887.1L257.0 885.0L255.8 884.2L254.3 886.6L255.7 884.1L246.7 875.2L245.2 868.1L241.2 866.9L245.5 865.7L240.4 865.4L238.8 858.9L239.6 854.7L241.7 854.9L242.9 850.6L240.5 849.5L244.5 826.5L244.4 828.9L248.6 829.8L249.7 823.8L245.3 822.8L244.6 825.4L248.3 798.7L261.0 800.2L261.6 797.3L262.1 793.5L256.3 791.2L256.3 789.6L261.9 790.6L261.2 786.1L263.5 784.9L266.7 763.9L253.8 761.6L254.1 759.5L267.1 761.2L267.7 752.6L256.8 751.5L258.0 740.8L268.5 742.0L269.3 729.6L258.2 728.1L270.1 727.6L269.7 724.9L265.4 724.6L269.8 723.6L271.0 705.4L268.6 703.8L271.1 704.0L271.3 700.1L267.0 699.6L267.2 696.7L264.1 697.3L264.3 695.2L267.2 696.2L267.4 693.3L264.9 693.2L263.1 692.5L274.6 692.5L274.9 690.6L265.0 687.7L274.5 689.0L276.0 682.3L264.9 679.0L265.4 677.2L276.7 677.3L277.3 672.7L273.0 670.5L273.2 672.5L272.1 672.4L272.8 670.6L271.0 670.3L271.2 672.2L269.9 672.1L270.8 670.3L268.7 670.0L268.9 671.9L267.7 671.8L268.5 670.0L266.4 669.6L266.0 671.5L266.2 669.2L266.6 667.4L274.7 668.5L275.0 665.7L267.0 664.4L267.4 662.5L275.5 663.6L275.9 660.8L267.6 659.5L268.0 657.6L276.2 658.7L276.6 655.7L268.3 654.5L268.7 652.7L272.9 653.2L274.3 648.4L270.0 646.1L275.4 648.2L278.1 639.1L275.2 636.7L278.4 637.7L272.8 634.6L272.8 634.0L278.7 636.8L280.9 627.3L291.6 610.6L289.9 609.6L290.8 608.0L283.6 603.8L285.4 600.6L292.7 604.5L295.2 602.4L293.4 600.5L295.7 601.5L294.8 600.1L300.6 592.7L292.5 588.0L301.1 591.8L303.5 587.4L296.0 582.0L304.1 586.4L305.6 583.7L297.6 579.3L297.6 577.4L310.5 583.0L312.2 579.9L300.8 573.4L301.7 571.8L313.1 578.2L315.4 573.4L303.4 566.5L304.3 565.3L316.1 571.9L318.6 567.3L306.7 560.5L307.7 559.3L319.4 565.9L322.0 561.2L310.1 554.5L311.0 553.2L319.7 558.2L321.6 554.9L312.6 549.9L313.6 548.1L322.5 553.1L325.7 547.1L324.0 545.1L327.5 545.0L319.6 539.8L320.3 538.5L328.1 542.8L329.3 540.7L321.1 535.3L330.3 540.2L331.5 538.0L323.0 533.0L331.1 536.8L337.2 527.5L338.0 525.7L336.8 525.4L342.1 515.8L344.0 515.7L349.6 505.6L339.8 506.1L349.5 504.7L361.9 478.3L359.4 474.9L355.9 479.1L359.5 474.1L362.1 478.1L363.3 475.7L360.9 474.3L363.6 475.2L364.9 472.7L360.2 472.9L365.0 472.5L439.5 332.4L458.8 304.8L458.2 300.5L454.9 299.7L456.0 297.7L458.5 299.0L459.9 303.2L461.1 301.1L461.3 297.5L456.2 294.3L467.9 273.9L472.6 276.5L474.4 274.3L486.1 252.3L490.3 242.9L496.6 216.7L505.0 197.3L501.9 165.8L514.6 157.1L520.5 149.5L554.8 83.7L554.3 76.6L555.1 73.2L556.2 73.9L556.7 66.6L563.7 51.2L570.4 40.7L576.9 35.6ZM590.4 399.1L598.9 411.1L616.5 422.2L620.2 428.9L622.6 437.7L617.7 446.4L611.4 454.3L605.2 457.5L592.0 477.6L589.6 487.0L583.7 492.9L579.2 493.6L570.5 499.7L559.8 492.6L545.4 489.6L541.6 483.8L542.9 476.8L554.9 457.4L564.6 449.5L570.6 452.1L577.8 452.6L577.6 447.8L576.1 447.2L579.7 447.3L575.5 446.8L576.4 451.2L571.4 451.5L574.1 446.8L569.9 444.9L569.7 441.2L574.8 429.7L574.1 421.5L572.0 421.0L573.8 420.6L572.8 417.1L575.7 407.4L573.6 406.2L576.4 406.3L574.4 404.9L576.3 404.9L580.0 398.7L584.1 398.5L590.4 399.1ZM534.9 500.5L535.8 499.3L536.0 501.8L528.8 506.1L533.5 497.5L534.9 500.5ZM526.0 549.7L481.7 614.0L462.1 638.0L448.8 650.9L458.1 630.8L483.3 596.0L510.1 553.1L519.5 542.3L527.0 538.0L526.0 549.7ZM321.1 883.9L315.9 880.9L322.9 871.9L326.8 873.9L321.1 883.9ZM316.3 894.1L309.0 890.7L311.0 886.6L318.2 889.9L316.3 894.1ZM313.2 901.8L305.3 898.2L307.3 894.1L315.0 897.4L313.2 901.8ZM305.6 916.6L298.1 913.2L300.4 908.7L308.1 912.3L305.6 916.6ZM306.5 933.2L291.7 927.7L293.1 924.0L301.9 927.3L306.5 933.2ZM302.8 924.6L294.5 920.8L296.5 916.7L304.5 920.3L302.8 924.6ZM296.7 938.0L288.1 935.0L289.7 930.9L298.3 934.1L296.7 938.0ZM292.4 944.7L284.4 941.8L285.9 937.7L295.2 941.3L292.4 944.7ZM288.6 951.6L280.6 948.7L282.1 944.8L290.9 947.6L288.6 951.6ZM269.4 962.6L264.8 964.5L279.4 954.5L269.4 962.6ZM253.1 921.4L260.2 926.0L265.1 923.6L266.4 925.0L260.6 926.5L263.2 929.6L265.3 928.9L263.5 930.7L266.1 931.0L264.7 931.2L264.3 939.6L261.2 945.0L255.0 949.3L247.1 951.2L248.6 953.4L254.0 953.3L248.5 953.9L245.3 958.4L248.1 953.7L246.8 951.3L234.4 958.9L235.6 961.0L238.6 959.7L232.9 963.1L235.4 961.1L234.1 959.0L226.9 963.2L228.6 966.1L225.3 970.2L227.8 966.0L226.3 963.6L219.5 965.1L213.3 961.1L213.0 954.5L235.6 926.4L237.3 921.2L253.1 921.4ZM163.8 883.9L172.0 891.3L170.1 896.0L166.0 897.2L159.1 890.4L157.3 892.2L164.0 899.2L157.6 905.2L150.3 897.6L159.6 885.8L160.7 886.9L163.8 883.9ZM150.9 937.7L153.8 935.4L154.4 936.3L151.0 937.9L150.4 942.1L147.7 943.3L138.9 936.4L136.4 938.0L135.5 936.6L138.6 935.9L137.6 931.4L141.5 930.8L150.9 937.7Z","Bronx":"M999.8 113.2L996.5 108.5L988.1 104.6L985.6 100.3L976.7 114.4L982.6 114.6L986.1 117.4L990.1 125.4L991.6 148.0L976.7 148.4L975.0 151.0L974.1 161.9L979.2 164.1L977.1 167.1L981.3 172.0L978.5 177.6L979.6 179.3L977.8 180.0L977.8 184.9L979.2 185.8L980.2 184.3L983.2 181.7L983.1 181.4L983.6 181.9L979.3 185.8L982.1 184.9L986.6 181.1L982.2 185.0L983.9 186.3L981.5 189.2L988.4 186.1L985.3 189.2L986.8 190.7L987.8 188.0L988.0 187.5L988.3 187.6L986.8 190.7L988.1 190.9L989.6 185.7L988.2 190.9L988.7 191.2L989.5 191.4L988.5 191.0L989.6 191.1L991.2 184.5L991.7 184.6L989.6 191.4L990.7 192.1L993.1 184.4L991.1 183.7L993.8 184.0L990.3 195.8L988.7 193.1L990.7 192.3L986.7 191.7L984.9 192.9L986.5 192.8L984.8 193.8L987.7 197.8L984.1 201.2L979.4 195.0L977.1 196.9L972.7 195.1L970.0 195.3L975.9 197.1L979.2 203.9L981.2 203.7L979.3 203.9L980.9 210.0L982.8 209.4L981.0 211.2L982.5 217.0L984.1 216.7L982.8 218.0L984.3 217.7L984.3 217.8L978.3 222.9L976.4 227.1L978.0 235.1L980.0 235.5L978.0 236.3L979.7 237.5L977.9 238.3L977.9 242.0L979.4 242.5L978.0 244.0L982.3 259.1L983.7 258.4L982.4 259.3L983.6 261.1L985.8 259.6L985.8 259.7L983.6 261.1L986.0 261.3L984.4 262.4L990.0 272.5L1000.0 272.4L999.7 274.5L996.2 273.7L999.9 274.7L990.5 274.4L986.0 279.4L986.5 281.9L989.4 281.6L985.5 282.9L985.6 284.5L987.6 283.6L985.7 284.6L986.2 286.6L992.3 285.4L985.3 290.8L988.1 293.0L990.0 289.1L993.6 291.2L996.8 287.5L1000.0 287.3L1000.0 345.9L993.3 345.9L985.9 342.8L983.9 343.2L983.6 346.1L983.7 343.2L976.4 341.6L961.6 345.6L962.7 348.4L959.8 349.5L962.5 348.3L959.5 348.3L962.0 347.3L961.5 345.6L948.9 349.6L945.2 351.3L946.1 353.1L944.6 351.6L945.9 353.9L943.1 352.4L944.2 355.1L943.0 352.5L943.5 355.2L942.5 352.7L942.6 354.3L931.0 353.8L923.8 358.6L919.7 366.0L921.4 384.4L911.6 383.3L900.2 378.3L890.0 353.1L889.3 347.9L892.5 338.5L890.6 322.6L895.7 314.0L894.3 313.0L895.0 301.8L882.4 268.5L884.0 260.6L895.1 246.3L893.8 222.2L891.9 218.1L889.8 218.3L892.4 244.6L890.2 249.4L882.9 256.6L879.6 265.0L881.7 275.9L890.8 301.5L890.9 312.4L883.7 317.9L872.0 351.0L868.5 356.8L864.7 357.3L861.0 348.2L850.4 339.0L844.0 338.5L845.0 341.0L842.3 342.8L835.0 339.5L841.9 343.4L850.2 343.0L857.7 349.0L857.6 355.6L854.4 363.8L856.2 366.2L854.7 366.9L856.0 369.1L859.1 368.0L856.3 369.4L860.3 372.7L860.4 377.5L863.7 381.9L859.5 385.5L855.2 383.6L852.2 386.6L831.8 385.7L830.6 384.4L833.9 385.6L834.2 383.8L828.2 382.6L829.7 384.5L822.8 380.3L824.3 379.3L823.2 375.9L821.5 377.0L822.3 379.3L821.1 378.0L820.4 371.9L821.2 375.0L823.0 375.3L824.0 368.4L822.0 358.8L817.7 362.0L820.6 364.9L820.4 368.9L815.8 361.8L790.3 357.3L779.0 338.5L758.1 330.6L757.3 334.2L773.1 341.0L779.8 350.0L779.8 354.1L788.7 375.7L775.5 400.6L773.2 401.9L773.3 407.2L771.0 406.9L772.0 402.5L768.9 404.0L762.7 401.4L752.2 401.7L753.1 397.2L751.2 395.1L745.3 394.8L731.9 399.1L727.1 397.8L716.5 384.1L711.7 383.2L711.9 380.0L708.5 384.3L711.4 379.6L702.6 381.1L701.9 377.4L699.2 377.6L699.9 380.9L700.8 380.7L701.2 382.6L704.5 384.0L702.8 383.8L701.1 382.7L700.7 380.9L699.8 381.1L699.1 377.6L691.4 378.2L691.5 380.6L690.6 375.1L689.1 376.4L689.9 380.4L688.8 376.5L687.4 376.8L687.7 380.2L686.9 376.9L681.8 378.2L682.1 380.2L680.0 378.5L680.5 381.5L679.4 378.6L678.1 382.0L664.6 384.3L647.9 403.8L643.4 410.1L644.4 410.5L644.8 411.0L642.1 410.7L642.5 413.1L630.0 424.3L622.8 423.5L603.5 412.9L599.1 409.9L595.2 401.9L589.4 396.7L572.3 395.1L573.5 391.2L572.2 388.9L568.3 388.4L554.4 365.7L553.2 358.1L555.0 314.0L550.5 250.7L552.7 236.8L561.8 216.4L568.7 193.6L590.7 152.7L597.1 142.2L598.9 142.8L598.1 140.7L601.6 135.2L623.9 103.9L626.3 105.5L628.1 102.6L626.2 101.3L634.8 88.5L641.3 65.4L640.2 61.7L644.6 58.3L648.5 44.4L647.1 38.9L635.2 28.6L630.9 28.7L628.9 33.0L615.3 44.6L608.2 44.8L600.8 41.2L590.0 29.3L582.2 29.3L594.2 0.0L1000.0 0.0L999.8 113.2ZM712.7 414.4L721.4 417.6L731.8 428.7L751.4 434.4L771.3 449.1L777.4 455.9L778.9 466.2L770.6 476.0L758.1 476.1L751.6 478.4L712.5 468.7L708.0 456.7L701.2 454.2L698.8 442.6L702.6 423.5L706.8 418.9L706.1 417.6L713.2 418.3L715.2 416.8L712.7 414.4ZM685.6 404.3L677.7 412.4L672.0 411.6L673.5 410.4L672.6 403.7L674.6 403.7L675.0 398.8L678.8 396.5L685.6 404.3ZM683.9 429.0L680.1 429.0L675.7 424.9L680.4 421.9L684.4 425.7L683.9 429.0Z"}};
+const EMBEDDED_DATA = null;
+(function(){
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt = n => Number(n).toLocaleString('en-US');
+const bikeSvg = '<svg viewBox="0 0 64 40" aria-hidden="true"><use href="#bike"/></svg>';
+const hourLabel = h => (h % 12 || 12) + (h < 12 ? ' AM' : ' PM');
+
+/* ---------------- dock illustration ---------------- */
+const N = 15, rack = $('#rack');
+rack.innerHTML = Array.from({length:N},()=>`<div class="slot">${bikeSvg}</div>`).join('');
+const slots = [...rack.children], order = [3,11,7,0,14,5,9,2,12,6,10,1,13,4,8];
+let step = 0;
+function renderDock(){
+  const gone = Math.min(step, N), left = N - gone;
+  slots.forEach((s,i)=>s.classList.toggle('gone', order.indexOf(i) < gone));
+  $('#bikesLeft').textContent = left;
+  const mins = 7*60 + Math.round(gone * (300/N));
+  $('#clock').textContent = Math.floor(mins/60) + ':' + String(mins%60).padStart(2,'0');
+  const p = $('#dockPill');
+  p.textContent = left===0 ? 'EMPTY' : left<=4 ? 'RUNNING LOW' : 'PLENTY';
+  p.className = 'pill' + (left<=4 ? ' empty' : '');
+}
+if (reduce) { step = N; renderDock(); } else { renderDock(); setInterval(()=>{ step = step >= N+4 ? 0 : step+1; renderDock(); }, 750); }
+$('#stencils').innerHTML = Array.from({length:10},()=>'<svg viewBox="0 0 64 40"><use href="#bike"/></svg>').join('');
+
+/* ---------------- static finding (live stream, Oct 21) ---------------- */
+const GROUPS = [
+  {area:'Jackson Heights & East Elmhurst', boro:'Queens', st:[['34 Ave & 83 St',22],['81 St & 35 Ave',25],['86 St & 37 Ave',22],['90 St & 32 Ave',20],['92 St & 37 Ave',19]]},
+  {area:'The Bronx', boro:'Bronx', st:[['3 Ave & Franklin Ave',19],['Anthony Ave & E 175 St',19],['Anthony Ave & E Tremont Ave',20],['Aqueduct Ave & W 190 St',20]]},
+  {area:'Sunnyside & Woodside', boro:'Queens', st:[['48 St & 50 Ave',21],['48 St & Skillman Ave',22]]},
+  {area:'Ridgewood & Glendale', boro:'Queens', st:[['60 Pl & 67 Ave',15],['65 Pl & Central Ave',21]]},
+  {area:'Washington Heights', boro:'Manhattan', st:[['Audubon Ave & Fort George Ave',23]]},
+  {area:'East New York', boro:'Brooklyn', st:[['Arlington Ave & Warwick St',18]]}
+];
+$('#groups').innerHTML = GROUPS.map(g=>`<div class="group"><h3>${g.area}<span>${g.boro.toUpperCase()} · ${g.st.length}</span></h3>${
+  g.st.map(([n,c])=>`<div class="st"><span class="st-name">${n}</span><span class="docks" aria-label="${c} docks, 0 bikes">${'<i></i>'.repeat(c)}<em>0 / ${c}</em></span></div>`).join('')}</div>`).join('');
+
+/* ---------------- build log ---------------- */
+const STOPS=[
+  ['Explore the live feed','Look at the source before designing anything'],
+  ['Clean rows + table design','Grain, composite keys, types, dirty data'],
+  ['Postgres in Docker','Volumes, ETL, transactions, idempotency'],
+  ['Poll every minute','Logging, error handling, drift free scheduling'],
+  ['Station names','Upserts, facts vs dimensions, joins'],
+  ['Only real changes','Duplicate vs redundant data, change detection'],
+  ['Redpanda producer','Topics, partitions, keys, idempotent producer'],
+  ['Consumer','Offsets after commit, exactly once in effect'],
+  ['Trip files to Parquet','Two schemas into one, typed columnar storage'],
+  ['Monthly loads','Atomic replace, backfills, rerun safety'],
+  ['Airflow + dbt','Orchestration, 11 models, 20 data tests'],
+  ['Dashboard + CI','Streamlit, pydeck, GitHub Actions']
+];
+$('#route').innerHTML = STOPS.map(([t,d],i)=>`<li class="stop"><span class="dot">${i+1}</span><div><h3>${t}</h3><p>${d}</p></div></li>`).join('');
+
+/* ---------------- commands ---------------- */
+const CMDS=[
+  ['make showcase','everything, end to end'],
+  ['make streaming','live stream only'],
+  ['make trips MONTH=202509','one month of rides'],
+  ['make dbt','build + test models'],
+  ['make dashboard','open port 8501'],
+  ['make airflow','open port 8081']
+];
+$('#cmds').innerHTML = CMDS.map(([c,w],i)=>`<div class="cmd"><code id="c${i}"></code><span class="why">${w}</span><button class="copy" type="button" data-i="${i}">Copy</button></div>`).join('');
+CMDS.forEach(([c],i)=>{ $('#c'+i).textContent = c; });
+document.querySelectorAll('.copy').forEach(b=>b.addEventListener('click', async()=>{
+  const el = $('#c'+b.dataset.i);
+  try { await navigator.clipboard.writeText(el.textContent); b.textContent='Copied'; }
+  catch(e){ const r=document.createRange(); r.selectNodeContents(el); const s=getSelection(); s.removeAllRanges(); s.addRange(r); b.textContent='Selected'; }
+  setTimeout(()=>b.textContent='Copy', 1400);
+}));
+
+/* ---------------- basemap ---------------- */
+const W = BASEMAP.w, H = BASEMAP.h;
+const project = (lat, lng) => [(lng - BASEMAP.lon0) * BASEMAP.c * BASEMAP.k, (BASEMAP.lat1 - lat) * BASEMAP.k];
+const bm = $('#basemap');
+bm.setAttribute('viewBox', `0 0 ${W} ${H}`);
+const LABELS = {Manhattan:[40.792,-73.972,-62], Bronx:[40.862,-73.875,0], Queens:[40.725,-73.845,0], Brooklyn:[40.664,-73.952,0]};
+bm.innerHTML = `<path class="nj" d="${BASEMAP.nj}"/>` +
+  Object.entries(BASEMAP.boros).map(([n,d])=>`<path class="boro" d="${d}"/>`).join('') +
+  Object.entries(LABELS).map(([n,[la,ln,rot]])=>{ const [x,y]=project(la,ln); return `<text class="lbl" x="${x.toFixed(0)}" y="${y.toFixed(0)}" text-anchor="middle" transform="rotate(${rot} ${x.toFixed(0)} ${y.toFixed(0)})">${n}</text>`; }).join('') +
+  (()=>{ const [x,y]=project(40.722,-74.058); return `<text class="lbl" x="${x}" y="${y}" text-anchor="middle">Jersey City</text>`; })();
+
+/* ---------------- flow animation ---------------- */
+const canvas = $('#flowCanvas'), ctx = canvas.getContext('2d');
+const css = getComputedStyle(document.documentElement);
+const C = { route: css.getPropertyValue('--route').trim(), spark: css.getPropertyValue('--spark').trim(),
+            lose: css.getPropertyValue('--lose').trim(), gain: css.getPropertyValue('--gain').trim() };
+let scale = 1, routes = [], dots = [], particles = [], playing = !reduce, hour = 8, data = null, timer = null;
+
+function size(){
+  const r = canvas.getBoundingClientRect(), dpr = Math.min(devicePixelRatio || 1, 2);
+  canvas.width = Math.round(r.width * dpr); canvas.height = Math.round(r.height * dpr);
+  scale = canvas.width / W;
+}
+new ResizeObserver(()=>{ size(); if (reduce || !playing) draw(0); }).observe(canvas);
+
+function curve(a, b){
+  const [x1,y1]=a, [x2,y2]=b, mx=(x1+x2)/2, my=(y1+y2)/2, dx=x2-x1, dy=y2-y1, len=Math.hypot(dx,dy)||1;
+  const bend = Math.min(0.28*len, 90);
+  return {x1,y1,x2,y2,cx:mx - dy/len*bend, cy:my + dx/len*bend, len};
+}
+const at = (r,t) => { const u=1-t; return [u*u*r.x1+2*u*t*r.cx+t*t*r.x2, u*u*r.y1+2*u*t*r.cy+t*t*r.y2]; };
+
+function setScene(newRoutes, newDots){
+  routes = newRoutes; dots = newDots; particles = [];
+  const maxT = Math.max(1, ...routes.map(r=>r.w));
+  routes.forEach(r=>{
+    r.alpha = 0.12 + 0.5 * Math.sqrt(r.w / maxT);
+    const n = Math.max(1, Math.round(5 * Math.sqrt(r.w / maxT)));
+    for (let i=0;i<n;i++) particles.push({r, t: Math.random(), v: (0.0035 + Math.random()*0.002) * (220 / Math.max(r.len, 60))});
+  });
+  if (reduce || !playing) draw(0);
+}
+
+function draw(dt){
+  ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.setTransform(scale,0,0,scale,0,0);
+  ctx.lineCap = 'round';
+  for (const r of routes){
+    ctx.strokeStyle = C.route; ctx.globalAlpha = r.alpha; ctx.lineWidth = 1.1 + 2.6 * (r.alpha - .12);
+    ctx.beginPath(); ctx.moveTo(r.x1,r.y1); ctx.quadraticCurveTo(r.cx,r.cy,r.x2,r.y2); ctx.stroke();
+  }
+  for (const d of dots){
+    ctx.globalAlpha = 0.78; ctx.fillStyle = d.net < 0 ? C.lose : C.gain;
+    ctx.beginPath(); ctx.arc(d.x, d.y, d.rad, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.fillStyle = C.spark;
+  for (const p of particles){
+    p.t += p.v * dt; if (p.t > 1) p.t -= 1;
+    const [x,y] = at(p.r, p.t);
+    ctx.globalAlpha = 0.95 * Math.sin(Math.PI * p.t) + 0.05;
+    ctx.beginPath(); ctx.arc(x, y, 2.6, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+let last = performance.now();
+function loop(now){ const dt = Math.min(3, (now - last) / 16.67); last = now; if (playing) draw(dt); requestAnimationFrame(loop); }
+
+/* ---------------- real data mode ---------------- */
+function sceneForHour(h){
+  const S = data.stations, flows = (data.flows||{})[h] || [], net = (data.net||{})[h] || [];
+  const rs = flows.map(([a,b,n])=>{ const r = curve(project(S[a][1],S[a][2]), project(S[b][1],S[b][2])); r.w = n; return r; });
+  const maxN = Math.max(1, ...net.map(x=>Math.abs(x[1])));
+  const ds = net.filter(x=>x[1]!==0).map(([i,n])=>{ const [x,y]=project(S[i][1],S[i][2]); return {x,y,net:n,rad:2.5 + 9*Math.sqrt(Math.abs(n)/maxN)}; });
+  setScene(rs, ds);
+  const sorted = [...net].sort((a,b)=>a[1]-b[1]);
+  const lose = sorted.slice(0,3).filter(x=>x[1]<0), gain = sorted.slice(-3).reverse().filter(x=>x[1]>0);
+  $('#movers').innerHTML =
+    lose.map(([i,n])=>`<div class="mover"><span class="tag l">LOSING</span><span>${esc(S[i][0])}</span><b>${n}</b></div>`).join('') +
+    gain.map(([i,n])=>`<div class="mover"><span class="tag g">GAINING</span><span>${esc(S[i][0])}</span><b>+${n}</b></div>`).join('');
+}
+function setHour(h){
+  hour = h; $('#hour').value = h; $('#mapHour').textContent = hourLabel(h);
+  document.querySelectorAll('#bars button').forEach((b,i)=>b.classList.toggle('on', i===h));
+  if (data) sceneForHour(String(h));
+}
+function setPlaying(p){
+  playing = p && !reduce;
+  $('#play').setAttribute('aria-label', playing ? 'Pause' : 'Play');
+  $('#playIcon').innerHTML = playing ? '<path d="M7 5h4v14H7zM13 5h4v14h-4z"/>' : '<path d="M8 5v14l11-7z"/>';
+  clearInterval(timer);
+  if (playing && data) timer = setInterval(()=>setHour((hour+1)%24), 3200);
+}
+$('#play').addEventListener('click', ()=>setPlaying(!playing));
+$('#hour').addEventListener('input', e=>{ setPlaying(false); setHour(+e.target.value); });
+
+function startReal(d){
+  data = d;
+  const hourly = d.hourly || [], max = Math.max(1, ...hourly.map(x=>x.weekday));
+  const byHour = Object.fromEntries(hourly.map(x=>[x.hour, x.weekday]));
+  $('#bars').innerHTML = Array.from({length:24},(_,h)=>`<button type="button" style="height:${Math.max(4, 100*(byHour[h]||0)/max)}%" aria-label="${hourLabel(h)}: ${fmt(byHour[h]||0)} rides per weekday" title="${hourLabel(h)} · ${fmt(byHour[h]||0)} rides"></button>`).join('');
+  document.querySelectorAll('#bars button').forEach((b,i)=>b.addEventListener('click',()=>{ setPlaying(false); setHour(i); }));
+  const st = d.stats || {}, months = st.trip_months || [];
+  const monthName = m => m ? new Date(+m.slice(0,4), +m.slice(4)-1, 1).toLocaleString('en-US',{month:'long',year:'numeric'}) : '';
+  $('#mapKicker').textContent = 'Average weekday' + (months[0] ? ' · ' + monthName(months[1]||months[0]) : '');
+  $('#flowNote').textContent = `${fmt(st.trips_loaded||0)} rides loaded. Showing the ${fmt(Math.max(...Object.values(d.flows||{}).map(v=>v.length),0))} busiest routes and the stations that gain or lose the most each hour. Exported ${String(d.generated_at||'').slice(0,10)}.`;
+  setHour(8); setPlaying(!reduce);
+  renderStats(st);
+}
+
+/* ---------------- preview mode, before trip data is exported ---------------- */
+const HOODS = [['Jackson Heights',40.7557,-73.8831,5],['The Bronx',40.8470,-73.8970,4],['Sunnyside',40.7433,-73.9196,2],
+               ['Ridgewood',40.7044,-73.9018,2],['Washington Heights',40.8510,-73.9360,1],['East New York',40.6660,-73.8820,1]];
+function startPreview(){
+  const mid = project(40.7549,-73.9840);
+  const rs = HOODS.map(([n,la,ln,c])=>{ const r = curve(project(la,ln), mid); r.w = c; return r; });
+  const ds = HOODS.map(([n,la,ln,c])=>{ const [x,y]=project(la,ln); return {x,y,net:-c,rad:5+3*c}; }).concat([{x:mid[0],y:mid[1],net:1,rad:14}]);
+  setScene(rs, ds);
+  $('#controls').hidden = true; $('#barsWrap').hidden = true;
+  $('#mapKicker').textContent = 'Live stream · Oct 21'; $('#mapHour').textContent = 'Noon';
+  $('#flowIntro').textContent = 'A preview from the live stream: neighborhoods whose stations sat empty all of noon on Oct 21, and where those bikes went. The full hour by hour replay of every ride appears once the monthly trip data is exported.';
+  $('#movers').innerHTML = HOODS.map(([n,,,c])=>`<div class="mover"><span class="tag l">EMPTY</span><span>${n}</span><b>${c}</b></div>`).join('');
+  $('#flowNote').textContent = 'Neighborhood positions are approximate. Line thickness = stations empty in that area.';
+  $('#legendRoute').textContent = 'Where those bikes went (Midtown)';
+  renderStats({});
+}
+
+function renderStats(st){
+  const items = [
+    [st.stations_tracked ? fmt(st.stations_tracked) : '2,519', 'stations tracked live'],
+    [st.trips_loaded ? fmt(st.trips_loaded) : '60s', st.trips_loaded ? 'rides modeled' : 'between every poll'],
+    ['171', 'empty at noon on Oct 21'],
+    ['20', 'dbt data tests on every build']
+  ];
+  $('#stats').innerHTML = items.map(([b,s])=>`<div class="stat" role="listitem"><b>${b}</b><span>${s}</span></div>`).join('');
+}
+
+/* ---------------- pipeline dots ---------------- */
+const NS = 'http://www.w3.org/2000/svg', pd = $('#pipeDots');
+if (!reduce){
+  [['s1',0],['s2',.3],['s3',.6],['s4',.9],['b1',.2],['b2',.5],['b3',.8],['b4',1.1],['m1',1.3],['m2',1.5],['m3',1.7]].forEach(([id,delay])=>{
+    const c = document.createElementNS(NS,'circle'); c.setAttribute('r','4.5'); c.setAttribute('class','dot' + (id[0]==='b' ? ' b' : ''));
+    const a = document.createElementNS(NS,'animateMotion'); a.setAttribute('dur','1.8s'); a.setAttribute('repeatCount','indefinite'); a.setAttribute('begin', (-delay)+'s');
+    const m = document.createElementNS(NS,'mpath'); m.setAttribute('href','#'+id); a.appendChild(m); c.appendChild(a); pd.appendChild(c);
+  });
+}
+
+/* ---------------- boot ---------------- */
+size();
+renderStats({});
+requestAnimationFrame(loop);
+const useData = d => (d && d.flows && Object.keys(d.flows).length ? startReal(d) : startPreview());
+if (EMBEDDED_DATA) useData(EMBEDDED_DATA);
+else {
+  // The page is served from the repo root or from /docs, so try both spots for the data file.
+  const tryFetch = urls => urls.length
+    ? fetch(urls[0], {cache:'no-store'}).then(r => r.ok ? r.json() : tryFetch(urls.slice(1))).catch(() => tryFetch(urls.slice(1)))
+    : Promise.resolve(null);
+  tryFetch(['data.json', 'docs/data.json']).then(useData);
+}
+})();
+</script>

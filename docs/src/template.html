@@ -637,6 +637,12 @@ renderStats({});
 requestAnimationFrame(loop);
 const useData = d => (d && d.flows && Object.keys(d.flows).length ? startReal(d) : startPreview());
 if (EMBEDDED_DATA) useData(EMBEDDED_DATA);
-else fetch('data.json', {cache:'no-store'}).then(r => r.ok ? r.json() : null).then(useData).catch(()=>startPreview());
+else {
+  // The page is served from the repo root or from /docs, so try both spots for the data file.
+  const tryFetch = urls => urls.length
+    ? fetch(urls[0], {cache:'no-store'}).then(r => r.ok ? r.json() : tryFetch(urls.slice(1))).catch(() => tryFetch(urls.slice(1)))
+    : Promise.resolve(null);
+  tryFetch(['data.json', 'docs/data.json']).then(useData);
+}
 })();
 </script>
