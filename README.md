@@ -1,4 +1,4 @@
-# dockwatch 🚲
+# DOCKWATCH by Eesha Pandit 🚲
 
 **Where did all the bikes go?** An end to end data pipeline on NYC bike share data: a **streaming lane** for live dock status, a **batch lane** for monthly ride history, and **dbt** turning both into tested answers.
 

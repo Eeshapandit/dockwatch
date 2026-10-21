@@ -1,4 +1,4 @@
-<title>dockwatch</title>
+<title>DOCKWATCH by Eesha Pandit</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -47,6 +47,9 @@ section{padding-block:76px}
 .hero{display:grid;grid-template-columns:1.1fr .9fr;gap:56px;align-items:center;padding-block:64px 44px}
 .hero > *{min-width:0}
 .brand{display:flex;align-items:center;gap:10px;font:800 1.15rem/1 var(--f-display);margin-bottom:28px}
+.brand > span{letter-spacing:.06em}
+.brand .by{font:500 1rem/1 var(--f-body);letter-spacing:0;color:var(--muted);margin-left:4px}
+.brand .by a{color:var(--ink);text-decoration:none;border-bottom:1.5px solid var(--lane)}
 .brand svg{width:34px;height:22px;color:var(--lane)}
 .hero h1{font-size:clamp(3rem,8vw,5.6rem);font-weight:800;letter-spacing:-.035em}
 .hero h1 em{font-style:normal;color:var(--lane)}
@@ -244,7 +247,7 @@ footer{border-top:1px solid var(--line);padding-block:32px 48px;color:var(--mute
 <div class="wrap">
   <header class="hero">
     <div>
-      <div class="brand"><svg aria-hidden="true"><use href="#bike"/></svg>dockwatch</div>
+      <div class="brand"><svg aria-hidden="true"><use href="#bike"/></svg><span>DOCKWATCH <span class="by">by <a href="https://eeshapanditt11.netlify.app" target="_blank" rel="noopener">Eesha Pandit</a></span></span></div>
       <div class="eyebrow">An end to end data pipeline on NYC bike share</div>
       <h1 style="margin-top:14px">Where did all the <em>bikes</em> go?</h1>
       <p class="lede">A project by <a class="byline-link" href="https://eeshapanditt11.netlify.app" target="_blank" rel="noopener">Eesha Pandit</a>. Every minute I stream the status of <b>every bike share station in NYC and Jersey City</b>, load every ride from the monthly trip files, and model where bikes pile up and where they run out.</p>
