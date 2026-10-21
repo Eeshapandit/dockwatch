@@ -22,7 +22,7 @@ flowchart LR
 
 At noon on a Wednesday, **171 stations were empty**, up from 151 forty minutes earlier.
 The stations empty the longest were all in residential neighborhoods far from Midtown:
-Jackson Heights, the Bronx, Washington Heights, Bushwick.
+Jackson Heights and Sunnyside in Queens, the Bronx, Washington Heights, East New York.
 
 Morning commuters ride into Manhattan and dock there, so bikes drain out of the outer boroughs and don't come back until evening. That's the rebalancing problem Citi Bike solves with vans and crews.
 

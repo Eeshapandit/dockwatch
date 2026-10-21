@@ -1,0 +1,523 @@
+<title>dockwatch</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: a city street. Paper sidewalk, a painted bike lane strip running between sections, a schematic borough map, and the build log drawn as a bike route with stops. */
+:root{
+  --paper:#F2F5F0; --surface:#FFFFFF; --ink:#15241C; --muted:#5B6B62; --line:#D5DED7;
+  --lane:#2E8B57; --lane-soft:#DCEFE3; --empty:#C9771A; --empty-soft:#FBEBD3;
+  --water:#E1EAEC; --land:#FFFFFF; --asphalt:#2B3430; --paint:#F6F8F6; --on-lane:#FFFFFF;
+  --f-display:"Bricolage Grotesque","Avenir Next","Segoe UI",sans-serif;
+  --f-body:"Figtree","Segoe UI",system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#0F1512; --surface:#16201B; --ink:#E6EEE8; --muted:#94A49B; --line:#26332C;
+  --lane:#4CC285; --lane-soft:#183022; --empty:#F0A541; --empty-soft:#3A2A12;
+  --water:#0B1816; --land:#1A2520; --asphalt:#1E2622; --paint:#DCE4DF; --on-lane:#0F1512; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#0F1512; --surface:#16201B; --ink:#E6EEE8; --muted:#94A49B; --line:#26332C;
+  --lane:#4CC285; --lane-soft:#183022; --empty:#F0A541; --empty-soft:#3A2A12;
+  --water:#0B1816; --land:#1A2520; --asphalt:#1E2622; --paint:#DCE4DF; --on-lane:#0F1512; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:400 17px/1.6 var(--f-body);-webkit-font-smoothing:antialiased}
+.wrap{max-width:1120px;margin:0 auto;padding-left:max(20px,env(safe-area-inset-left,0px));padding-right:max(20px,env(safe-area-inset-right,0px))}
+h1,h2,h3{font-family:var(--f-display);margin:0;line-height:1.02;text-wrap:balance;letter-spacing:-.02em}
+h2{font-size:clamp(2rem,4.6vw,3.2rem);font-weight:800}
+h3{font-size:1.2rem;font-weight:700;letter-spacing:-.01em}
+p{margin:0}
+a{color:var(--lane)}
+:focus-visible{outline:2.5px solid var(--lane);outline-offset:3px;border-radius:4px}
+.eyebrow{font:600 .74rem/1 var(--f-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--lane)}
+.muted{color:var(--muted)}
+.mono{font-family:var(--f-mono)}
+section{padding-block:72px}
+.sec-head{display:grid;gap:12px;margin-bottom:36px;max-width:680px}
+.sec-head p{color:var(--muted);font-size:1.08rem}
+
+/* ---------- Hero ---------- */
+.hero{display:grid;grid-template-columns:1.1fr .9fr;gap:56px;align-items:center;padding-block:64px 48px}
+.hero > *{min-width:0}
+.brand{display:flex;align-items:center;gap:10px;font:800 1.15rem/1 var(--f-display);letter-spacing:-.01em;margin-bottom:28px}
+.brand svg{width:34px;height:22px;color:var(--lane)}
+.hero h1{font-size:clamp(3rem,8vw,5.6rem);font-weight:800;letter-spacing:-.035em}
+.hero h1 em{font-style:normal;color:var(--lane)}
+.lede{font-size:1.2rem;margin-top:22px;max-width:36ch;color:var(--muted)}
+.lede b{color:var(--ink);font-weight:600}
+.cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:30px}
+.btn{display:inline-flex;align-items:center;gap:8px;font:600 .95rem/1 var(--f-body);padding:13px 18px;border-radius:999px;text-decoration:none;border:1.5px solid var(--ink);color:var(--ink);background:transparent;cursor:pointer}
+.btn.primary{background:var(--lane);border-color:var(--lane);color:var(--on-lane)}
+.btn svg{width:18px;height:18px}
+
+.dock{background:var(--surface);border:1px solid var(--line);border-radius:22px;padding:26px;box-shadow:0 30px 60px -40px rgba(20,40,30,.35)}
+.dock-top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.dock-name{font:700 1.15rem/1.2 var(--f-display)}
+.dock-sub{font:500 .72rem/1.4 var(--f-mono);color:var(--muted);margin-top:4px}
+.clock{font:600 1.5rem/1 var(--f-mono);font-variant-numeric:tabular-nums}
+.rack{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin:22px 0 18px}
+.slot{aspect-ratio:1.5/1;border-radius:10px;border:1.5px dashed var(--line);display:grid;place-items:center;transition:background .5s,border-color .5s}
+.slot svg{width:78%;color:var(--lane);transition:opacity .5s,transform .5s}
+.slot.gone{border-color:var(--empty);background:var(--empty-soft)}
+.slot.gone svg{opacity:0;transform:translateX(30%)}
+.meter{display:flex;justify-content:space-between;align-items:baseline;gap:12px;border-top:1px solid var(--line);padding-top:14px}
+.meter b{font:800 2.4rem/1 var(--f-display);font-variant-numeric:tabular-nums}
+.pill{font:600 .72rem/1 var(--f-mono);letter-spacing:.08em;padding:7px 10px;border-radius:999px;background:var(--lane-soft);color:var(--lane);transition:background .4s,color .4s}
+.pill.empty{background:var(--empty-soft);color:var(--empty)}
+.illus{font-size:.78rem;color:var(--muted);margin-top:12px}
+
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:0;margin-top:8px;border-block:1px solid var(--line)}
+.stat{padding:20px 18px;border-right:1px solid var(--line)}
+.stat:last-child{border-right:none}
+.stat b{display:block;font:800 clamp(1.6rem,3.4vw,2.3rem)/1 var(--f-display);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.stat span{font-size:.88rem;color:var(--muted)}
+
+/* ---------- Street strip ---------- */
+.street{position:relative;height:110px;background:var(--asphalt);overflow:hidden;margin-top:56px}
+.lane{position:absolute;left:0;right:0;top:28px;height:54px;background:var(--lane);opacity:.92}
+.lane::before,.lane::after{content:"";position:absolute;left:0;right:0;height:3px;background:repeating-linear-gradient(90deg,var(--paint) 0 34px,transparent 34px 56px)}
+.lane::before{top:-8px}.lane::after{bottom:-8px}
+.stencils{position:absolute;inset:28px 0 auto;height:54px;display:flex;gap:220px;padding-left:80px;color:var(--paint);opacity:.55}
+.stencils svg{width:58px;flex:none;margin-top:9px}
+.rider{position:absolute;top:22px;left:0;width:96px;color:var(--paint);animation:ride 11s linear infinite}
+.rider .spin{transform-box:fill-box;transform-origin:center;animation:spin .7s linear infinite}
+@keyframes ride{from{transform:translateX(-120px)}to{transform:translateX(calc(100vw + 40px))}}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ---------- Finding ---------- */
+.finding{display:grid;grid-template-columns:1.05fr .95fr;gap:48px;align-items:start}
+.finding > *{min-width:0}
+.mapcard{background:var(--water);border-radius:22px;padding:14px;position:relative}
+.map{display:block;width:100%;height:auto}
+.map .land{fill:var(--land);stroke:var(--line);stroke-width:1.5}
+.map .boro{font:700 13px var(--f-display);fill:var(--muted);letter-spacing:.12em;text-transform:uppercase}
+.map .hood{font:600 11px var(--f-body);fill:var(--ink)}
+.map .flow{fill:none;stroke:var(--empty);stroke-width:1.4;stroke-dasharray:3 5;opacity:.6}
+.map .origin{fill:var(--empty)}
+.map .halo{fill:var(--empty);opacity:.18}
+.map .dest{fill:var(--lane)}
+.map .destring{fill:none;stroke:var(--lane);stroke-width:2}
+.map .particle{fill:var(--empty)}
+.maplegend{display:flex;flex-wrap:wrap;gap:16px;font-size:.82rem;color:var(--muted);padding:10px 8px 2px}
+.maplegend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:0}
+
+.story{display:grid;gap:22px}
+.bignum{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap}
+.bignum b{font:800 clamp(4rem,10vw,6.5rem)/.85 var(--f-display);color:var(--empty);letter-spacing:-.04em;font-variant-numeric:tabular-nums}
+.bignum span{font-size:1rem;color:var(--muted);max-width:18ch;padding-bottom:6px}
+.trend{display:flex;align-items:center;gap:10px;font:600 .9rem/1 var(--f-mono);color:var(--muted)}
+.trend .arrow{color:var(--empty)}
+.story p{max-width:52ch}
+
+.groups{display:grid;gap:18px;margin-top:8px}
+.group h3{font-size:1rem;display:flex;justify-content:space-between;gap:8px;align-items:baseline;border-bottom:1px solid var(--line);padding-bottom:8px;margin-bottom:6px}
+.group h3 span{font:500 .75rem/1 var(--f-mono);color:var(--muted);letter-spacing:.04em}
+.st{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:center;padding:6px 0}
+.st-name{font-weight:500;font-size:.95rem;overflow-wrap:anywhere}
+.docks{display:flex;gap:2px;align-items:center}
+.docks i{width:5px;height:12px;border-radius:2px;border:1.2px solid var(--empty);opacity:.85}
+.docks em{font:500 .72rem/1 var(--f-mono);color:var(--muted);font-style:normal;margin-left:6px;min-width:3.6em;text-align:right;font-variant-numeric:tabular-nums}
+.footnote{font-size:.82rem;color:var(--muted);margin-top:16px;max-width:60ch}
+
+/* ---------- Pipeline ---------- */
+.pipe-scroll{overflow-x:auto;padding-bottom:6px}
+.pipe{display:block;min-width:820px;width:100%;height:auto}
+.pipe text{font-family:var(--f-body);fill:var(--ink)}
+.pipe .sub{fill:var(--muted);font-family:var(--f-mono)}
+.pipe .node{fill:var(--surface);stroke:var(--line);stroke-width:1.5}
+.pipe .node.built{stroke:var(--lane);stroke-width:2}
+.pipe .node.planned{stroke-dasharray:6 5}
+.pipe .track{fill:none;stroke:var(--lane);stroke-width:6;stroke-linecap:round;opacity:.25}
+.pipe .track.planned{stroke:var(--muted);opacity:.25;stroke-dasharray:2 10}
+.pipe .biker{color:var(--lane)}
+.pipe .tag{font:600 10px var(--f-mono);letter-spacing:.1em}
+.pipe .tag.built{fill:var(--lane)}.pipe .tag.planned{fill:var(--muted)}
+
+/* ---------- Decisions ---------- */
+.decisions{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:18px;overflow:hidden}
+.dec{background:var(--surface);padding:24px;display:grid;gap:12px;align-content:start;min-width:0}
+.dec .q{font:600 .7rem/1.3 var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--empty)}
+.dec p{color:var(--muted);font-size:.95rem}
+.dec code{font-family:var(--f-mono);font-size:.85em;background:var(--lane-soft);color:var(--ink);padding:1px 6px;border-radius:5px;overflow-wrap:anywhere}
+
+/* ---------- Route (build log) ---------- */
+.route{list-style:none;margin:0;padding:0;position:relative;display:grid;gap:0;max-width:760px}
+.route::before{content:"";position:absolute;left:15px;top:14px;bottom:14px;width:6px;border-radius:3px;background:linear-gradient(var(--lane) 0 var(--done,40%),var(--line) var(--done,40%) 100%)}
+.stop{display:grid;grid-template-columns:36px minmax(0,1fr) auto;gap:18px;align-items:start;padding:12px 0;position:relative}
+.dot{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:var(--paper);border:3px solid var(--line);position:relative;z-index:1;font:600 .75rem/1 var(--f-mono);color:var(--muted)}
+.stop.done .dot{background:var(--lane);border-color:var(--lane);color:var(--on-lane)}
+.stop.next .dot{border-color:var(--empty);color:var(--empty);background:var(--surface)}
+.stop.next .dot::after{content:"";position:absolute;inset:-9px;border-radius:50%;border:2px solid var(--empty);opacity:0;animation:ping 2s ease-out infinite}
+@keyframes ping{0%{opacity:.7;transform:scale(.7)}100%{opacity:0;transform:scale(1.25)}}
+.stop h3{font-size:1.08rem;margin-top:6px}
+.stop p{font-size:.92rem;color:var(--muted);margin-top:3px}
+.badge{font:600 .68rem/1 var(--f-mono);letter-spacing:.08em;padding:6px 9px;border-radius:999px;margin-top:8px;white-space:nowrap;border:1px solid var(--line);color:var(--muted)}
+.stop.done .badge{background:var(--lane-soft);color:var(--lane);border-color:transparent}
+.stop.next .badge{background:var(--empty-soft);color:var(--empty);border-color:transparent}
+
+/* ---------- Run ---------- */
+.run{display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:start}
+.run > *{min-width:0}
+.cmds{display:grid;gap:8px}
+.cmd{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 10px 10px 14px;min-width:0}
+.cmd code{flex:1;min-width:0;overflow-x:auto;white-space:nowrap;font:500 .85rem/1.4 var(--f-mono)}
+.cmd .why{font-size:.8rem;color:var(--muted);white-space:nowrap}
+.copy{font:600 .75rem/1 var(--f-body);padding:8px 11px;border-radius:999px;border:1px solid var(--line);background:var(--paper);color:var(--ink);cursor:pointer}
+.stack{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+.chip{font:500 .8rem/1 var(--f-mono);padding:8px 11px;border-radius:999px;border:1px solid var(--line);background:var(--surface)}
+.chip.planned{border-style:dashed;color:var(--muted);background:transparent}
+
+footer{border-top:1px solid var(--line);padding-block:32px 48px;color:var(--muted);font-size:.88rem;display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px}
+
+@media (max-width:900px){
+  .hero,.finding,.run{grid-template-columns:1fr}
+  .decisions{grid-template-columns:1fr 1fr}
+  .stats{grid-template-columns:1fr 1fr}
+  .stat:nth-child(2){border-right:none}
+  .stat:nth-child(-n+2){border-bottom:1px solid var(--line)}
+}
+@media (max-width:560px){
+  section{padding-block:52px}
+  .decisions{grid-template-columns:1fr}
+  .cmd .why{display:none}
+  .stop{grid-template-columns:36px minmax(0,1fr)}
+  .stop .badge{grid-column:2;justify-self:start;margin-top:0}
+  .rack{gap:7px}
+}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}.rider{transform:translateX(40vw)}}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="bike" viewBox="0 0 64 40">
+      <g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="14" cy="27" r="10"/><circle cx="50" cy="27" r="10"/>
+        <path d="M14 27 L25 12 L44 12 L50 27 M25 12 L32 27 L44 12 M32 27 H14 M25 12 L23 6 M19 6 H28 M44 12 L42 5 M39 5 H46"/>
+      </g>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="wrap">
+  <header class="hero">
+    <div>
+      <div class="brand"><svg aria-hidden="true"><use href="#bike"/></svg>dockwatch</div>
+      <div class="eyebrow">A data pipeline on live NYC bike share data</div>
+      <h1 style="margin-top:14px">Where did all the <em>bikes</em> go?</h1>
+      <p class="lede">Every minute, I pull the status of <b>every bike share station in NYC and Jersey City</b>, clean it, store it, and ask which ones run dry. Built step by step, in public.</p>
+      <div class="cta">
+        <a class="btn primary" href="https://github.com/Eeshapandit/dockwatch" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.78 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.7 5.4-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/></svg>
+          View the code
+        </a>
+        <a class="btn" href="#finding">See the finding</a>
+      </div>
+    </div>
+
+    <div class="dock" aria-label="Illustration of a station rack draining during the morning">
+      <div class="dock-top">
+        <div>
+          <div class="dock-name">A station in Jackson Heights</div>
+          <div class="dock-sub">15 docks · weekday morning</div>
+        </div>
+        <div class="clock" id="clock">7:00</div>
+      </div>
+      <div class="rack" id="rack"></div>
+      <div class="meter">
+        <div><b id="bikesLeft">15</b> <span class="muted">bikes left</span></div>
+        <span class="pill" id="dockPill">PLENTY</span>
+      </div>
+      <p class="illus">Illustration of the pattern, not a recording of one station.</p>
+    </div>
+  </header>
+
+  <div class="stats" role="list">
+    <div class="stat" role="listitem"><b>2,519</b><span>stations tracked</span></div>
+    <div class="stat" role="listitem"><b>60s</b><span>between every poll</span></div>
+    <div class="stat" role="listitem"><b>171</b><span>empty at noon, on a Wednesday</span></div>
+    <div class="stat" role="listitem"><b>0</b><span>duplicate rows when a load reruns</span></div>
+  </div>
+</div>
+
+<div class="street" aria-hidden="true">
+  <div class="lane"></div>
+  <div class="stencils" id="stencils"></div>
+  <svg class="rider" viewBox="0 0 96 64">
+    <g fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">
+      <g class="spin"><circle cx="20" cy="46" r="13"/><path d="M20 33 V59 M7 46 H33"/></g>
+      <g class="spin"><circle cx="74" cy="46" r="13"/><path d="M74 33 V59 M61 46 H87"/></g>
+      <path d="M20 46 L36 26 L62 26 L74 46 M36 26 L46 46 L62 26 M46 46 H20 M36 26 L33 18 M28 18 H39 M62 26 L59 15 M55 15 H64"/>
+      <path d="M35 17 L48 4 L60 14 M48 4 L46 30 L52 40" stroke-width="4"/>
+    </g>
+    <circle cx="52" cy="2" r="5.5" fill="currentColor"/>
+  </svg>
+</div>
+
+<div class="wrap">
+  <section id="finding">
+    <div class="sec-head">
+      <span class="eyebrow">The first finding</span>
+      <h2>Bikes ride into Manhattan, and stay there</h2>
+      <p>Morning commuters pick up bikes near home and dock them near work. By midday, the residential stations are drained, and they stay empty until people ride home.</p>
+    </div>
+
+    <div class="finding">
+      <div class="mapcard">
+        <svg class="map" viewBox="0 0 600 520" role="img" aria-label="Schematic map: the longest empty stations are in Queens, the Bronx, Washington Heights and East New York, while bikes flow toward Midtown">
+          <!-- schematic land shapes, not to scale -->
+          <path class="land" d="M30 230 Q80 205 140 220 L150 430 Q90 450 40 430 Z"/>
+          <path class="land" d="M262 26 L302 38 Q280 240 246 432 L204 424 Q230 220 262 26 Z"/>
+          <path class="land" d="M310 30 Q400 6 482 22 L490 118 Q410 140 330 132 Q318 80 310 30 Z"/>
+          <path class="land" d="M318 160 Q450 140 572 158 L584 372 Q480 400 372 392 Q320 320 318 160 Z"/>
+          <path class="land" d="M262 430 Q330 404 420 404 Q500 410 530 430 L520 506 Q400 516 284 504 Z"/>
+
+          <text class="boro" x="58" y="452">Jersey City</text>
+          <text class="boro" x="188" y="470" transform="rotate(-80 188 470)">Manhattan</text>
+          <text class="boro" x="430" y="112">Bronx</text>
+          <text class="boro" x="500" y="380">Queens</text>
+          <text class="boro" x="300" y="496">Brooklyn</text>
+
+          <g id="flows"></g>
+          <g id="particles"></g>
+
+          <circle class="destring" cx="246" cy="282" r="20"/>
+          <circle class="dest" cx="246" cy="282" r="9"/>
+          <text class="hood" x="214" y="318" text-anchor="middle">Midtown</text>
+
+          <g id="origins"></g>
+        </svg>
+        <div class="maplegend">
+          <span><i style="background:var(--empty)"></i>Stations empty all 30 minutes (dot size = count)</span>
+          <span><i style="background:var(--lane)"></i>Where morning rides end</span>
+          <span>Schematic, not to scale</span>
+        </div>
+      </div>
+
+      <div class="story">
+        <div class="bignum"><b>171</b><span>stations with zero bikes at noon on Wednesday, Oct 21</span></div>
+        <div class="trend"><span>151 at 11:24</span><span class="arrow">→</span><span>171 at 12:02</span><span class="arrow">▲ 20 in 38 min</span></div>
+        <p class="muted">Below are 15 stations that sat empty for the entire 30 minute window, grouped by neighborhood. Each mark is one dock, and every one is empty.</p>
+        <div class="groups" id="groups"></div>
+        <p class="footnote">Many more stations tied at the full 30 minutes. These are the first 15 alphabetically. A longer window will rank them properly once more history is collected.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="how">
+    <div class="sec-head">
+      <span class="eyebrow">How it works</span>
+      <h2>From a public feed to an answer</h2>
+      <p>Solid stops are built and running. Dashed stops are next on the route.</p>
+    </div>
+    <div class="pipe-scroll">
+      <svg class="pipe" viewBox="0 0 1000 270" role="img" aria-label="Pipeline: live feed to poller to Postgres to SQL, with Kafka, Airflow, dbt and dashboard planned">
+        <path id="trk" class="track" d="M40 145 H960"/>
+        <path class="track planned" d="M110 215 H890"/>
+
+        <rect class="node built" x="20" y="45" width="180" height="80" rx="16"/>
+        <text x="110" y="80" text-anchor="middle" font-size="16" font-weight="700">Live GBFS feed</text>
+        <text class="sub" x="110" y="102" text-anchor="middle" font-size="11">2,500+ stations</text>
+
+        <rect class="node built" x="280" y="45" width="180" height="80" rx="16"/>
+        <text x="370" y="80" text-anchor="middle" font-size="16" font-weight="700">poller.py</text>
+        <text class="sub" x="370" y="102" text-anchor="middle" font-size="11">extract + clean, every 60s</text>
+
+        <rect class="node built" x="540" y="45" width="180" height="80" rx="16"/>
+        <text x="630" y="80" text-anchor="middle" font-size="16" font-weight="700">Postgres</text>
+        <text class="sub" x="630" y="102" text-anchor="middle" font-size="11">facts + dimension</text>
+
+        <rect class="node built" x="800" y="45" width="180" height="80" rx="16"/>
+        <text x="890" y="80" text-anchor="middle" font-size="16" font-weight="700">SQL answers</text>
+        <text class="sub" x="890" y="102" text-anchor="middle" font-size="11">LEAD() → minutes empty</text>
+
+        <rect class="node planned" x="20" y="180" width="180" height="70" rx="16"/>
+        <text x="110" y="221" text-anchor="middle" font-size="15" font-weight="700">Kafka (Redpanda)</text>
+        <rect class="node planned" x="280" y="180" width="180" height="70" rx="16"/>
+        <text x="370" y="221" text-anchor="middle" font-size="15" font-weight="700">Airflow</text>
+        <rect class="node planned" x="540" y="180" width="180" height="70" rx="16"/>
+        <text x="630" y="221" text-anchor="middle" font-size="15" font-weight="700">dbt models + tests</text>
+        <rect class="node planned" x="800" y="180" width="180" height="70" rx="16"/>
+        <text x="890" y="221" text-anchor="middle" font-size="15" font-weight="700">Dashboard</text>
+
+        <text class="tag built" x="20" y="30">BUILT</text>
+        <text class="tag planned" x="20" y="172">NEXT ON THE ROUTE</text>
+
+        <g class="biker" id="pipeBiker">
+          <use href="#bike" x="-22" y="-30" width="44" height="28"/>
+        </g>
+      </svg>
+    </div>
+  </section>
+
+  <section id="decisions">
+    <div class="sec-head">
+      <span class="eyebrow">Design decisions</span>
+      <h2>Every choice has a reason</h2>
+      <p>The part interviewers ask about. Each one came from a real problem in the data.</p>
+    </div>
+    <div class="decisions">
+      <div class="dec"><span class="q">Rerunning a load</span><h3>Idempotent by design</h3><p>A composite key <code>(station_id, last_reported)</code> plus <code>on conflict do nothing</code>. My second test run inserted exactly 0 rows.</p></div>
+      <div class="dec"><span class="q">Fake 1970 timestamps</span><h3>Fix the cause</h3><p>54 stations reported Jan 2, 1970. The real reason was <code>is_installed = false</code>, so that is what the filter checks.</p></div>
+      <div class="dec"><span class="q">Mixed ID formats</span><h3>Keys as text</h3><p>The same feed sends UUIDs and long numbers. A strict type would have crashed on one of them.</p></div>
+      <div class="dec"><span class="q">Names vs live counts</span><h3>Facts and dimensions</h3><p>Status changes every minute, so it appends. Names and capacity rarely change, so they upsert, one row per station.</p></div>
+      <div class="dec"><span class="q">Snapshots, not durations</span><h3>Window functions</h3><p><code>LEAD()</code> finds each station's next report, which turns "had 0 bikes at 11:40" into "was empty for 28 minutes".</p></div>
+      <div class="dec"><span class="q">1,700 rows a minute</span><h3>Duplicate ≠ redundant</h3><p>Stations send heartbeats even when nothing changed. No duplicates, but lots of waste. Storing only real changes is the next stop.</p></div>
+    </div>
+  </section>
+
+  <section id="log">
+    <div class="sec-head">
+      <span class="eyebrow">Build log</span>
+      <h2>The route so far</h2>
+      <p>One concept per stop. Each one is a commit in the repo.</p>
+    </div>
+    <ol class="route" id="route"></ol>
+  </section>
+
+  <section id="run">
+    <div class="run">
+      <div class="sec-head" style="margin-bottom:0">
+        <span class="eyebrow">Run it yourself</span>
+        <h2>Five commands</h2>
+        <p>Works in GitHub Codespaces with nothing installed locally, or anywhere with Python and Docker.</p>
+        <div class="stack">
+          <span class="chip">Python</span><span class="chip">PostgreSQL</span><span class="chip">Docker</span><span class="chip">SQL window functions</span>
+          <span class="chip planned">Kafka</span><span class="chip planned">Airflow</span><span class="chip planned">dbt</span><span class="chip planned">Streamlit</span>
+        </div>
+      </div>
+      <div class="cmds" id="cmds"></div>
+    </div>
+  </section>
+</div>
+
+<div class="wrap">
+  <footer>
+    <span>Built by <a href="https://www.linkedin.com/in/eesha-pandit-ba61751b9" target="_blank" rel="noopener">Eesha Pandit</a></span>
+    <span>Data from the public GBFS bike share feed. Independent project, not affiliated with any bike share operator.</span>
+  </footer>
+</div>
+
+<script>
+(function(){
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const $ = s => document.querySelector(s);
+const bikeSvg = '<svg viewBox="0 0 64 40" aria-hidden="true"><use href="#bike"/></svg>';
+
+/* Dock drain illustration */
+const N = 15, rack = $('#rack');
+rack.innerHTML = Array.from({length:N},()=>`<div class="slot">${bikeSvg}</div>`).join('');
+const slots = [...rack.children];
+const order = [3,11,7,0,14,5,9,2,12,6,10,1,13,4,8];
+let step = 0;
+function renderDock(){
+  const gone = Math.min(step, N);
+  slots.forEach((s,i)=>s.classList.toggle('gone', order.indexOf(i) < gone));
+  const left = N - gone;
+  $('#bikesLeft').textContent = left;
+  const mins = 7*60 + Math.round(gone * (300/N));
+  $('#clock').textContent = Math.floor(mins/60) + ':' + String(mins%60).padStart(2,'0');
+  const p = $('#dockPill');
+  if(left===0){p.textContent='EMPTY';p.className='pill empty'}
+  else if(left<=4){p.textContent='RUNNING LOW';p.className='pill empty'}
+  else {p.textContent='PLENTY';p.className='pill'}
+}
+if(reduce){ step = N; renderDock(); }
+else {
+  renderDock();
+  setInterval(()=>{ step = step >= N + 4 ? 0 : step + 1; renderDock(); }, 750);
+}
+
+/* Lane stencils */
+$('#stencils').innerHTML = Array.from({length:10},()=>'<svg viewBox="0 0 64 40"><use href="#bike"/></svg>').join('');
+
+/* Finding: real stations from the Oct 21 query, grouped by neighborhood */
+const GROUPS = [
+  {area:'Jackson Heights & East Elmhurst', boro:'Queens', x:440, y:228, st:[['34 Ave & 83 St',22],['81 St & 35 Ave',25],['86 St & 37 Ave',22],['90 St & 32 Ave',20],['92 St & 37 Ave',19]]},
+  {area:'The Bronx', boro:'Bronx', x:392, y:74, st:[['3 Ave & Franklin Ave',19],['Anthony Ave & E 175 St',19],['Anthony Ave & E Tremont Ave',20],['Aqueduct Ave & W 190 St',20]]},
+  {area:'Sunnyside & Woodside', boro:'Queens', x:356, y:252, st:[['48 St & 50 Ave',21],['48 St & Skillman Ave',22]]},
+  {area:'Ridgewood & Glendale', boro:'Queens', x:418, y:340, st:[['60 Pl & 67 Ave',15],['65 Pl & Central Ave',21]]},
+  {area:'Washington Heights', boro:'Manhattan', x:278, y:70, st:[['Audubon Ave & Fort George Ave',23]]},
+  {area:'East New York', boro:'Brooklyn', x:456, y:452, st:[['Arlington Ave & Warwick St',18]]}
+];
+$('#groups').innerHTML = GROUPS.map(g=>`
+  <div class="group">
+    <h3>${g.area}<span>${g.boro.toUpperCase()} · ${g.st.length}</span></h3>
+    ${g.st.map(([n,c])=>`<div class="st"><span class="st-name">${n}</span><span class="docks" aria-label="${c} docks, 0 bikes">${'<i></i>'.repeat(c)}<em>0 / ${c}</em></span></div>`).join('')}
+  </div>`).join('');
+
+const NS='http://www.w3.org/2000/svg', DX=246, DY=282;
+const flows=$('#flows'), origins=$('#origins'), parts=$('#particles');
+GROUPS.forEach((g,i)=>{
+  const mx=(g.x+DX)/2 + (g.y<DY? 30:-30), my=(g.y+DY)/2 + (g.x>DX? -24:24);
+  const d=`M${g.x} ${g.y} Q${mx} ${my} ${DX} ${DY}`;
+  const p=document.createElementNS(NS,'path'); p.setAttribute('d',d); p.setAttribute('class','flow'); p.id='f'+i; flows.appendChild(p);
+  const r=5+g.st.length*2.4;
+  const h=document.createElementNS(NS,'circle'); h.setAttribute('cx',g.x);h.setAttribute('cy',g.y);h.setAttribute('r',r+8);h.setAttribute('class','halo');origins.appendChild(h);
+  const c=document.createElementNS(NS,'circle'); c.setAttribute('cx',g.x);c.setAttribute('cy',g.y);c.setAttribute('r',r);c.setAttribute('class','origin');origins.appendChild(c);
+  const t=document.createElementNS(NS,'text'); t.setAttribute('x',g.x);t.setAttribute('y',g.y+r+16);t.setAttribute('text-anchor','middle');t.setAttribute('class','hood');t.textContent=g.area.split(' & ')[0];origins.appendChild(t);
+  if(!reduce){
+    for(let k=0;k<3;k++){
+      const dot=document.createElementNS(NS,'circle'); dot.setAttribute('r','3.2'); dot.setAttribute('class','particle');
+      const a=document.createElementNS(NS,'animateMotion');
+      a.setAttribute('dur',(3.2+i*.25)+'s'); a.setAttribute('repeatCount','indefinite'); a.setAttribute('begin',(-(k*1.1+i*.3))+'s');
+      const m=document.createElementNS(NS,'mpath'); m.setAttribute('href','#f'+i);
+      a.appendChild(m); dot.appendChild(a); parts.appendChild(dot);
+    }
+  }
+});
+
+/* Pipeline biker rides the built track */
+const biker=$('#pipeBiker');
+if(reduce){ biker.setAttribute('transform','translate(500 145)'); }
+else {
+  const a=document.createElementNS(NS,'animateMotion');
+  a.setAttribute('dur','6s'); a.setAttribute('repeatCount','indefinite');
+  const m=document.createElementNS(NS,'mpath'); m.setAttribute('href','#trk');
+  a.appendChild(m); biker.appendChild(a);
+}
+
+/* Build log route */
+const STOPS=[
+  ['Explore the live feed','Look at the source before designing anything','done'],
+  ['Clean rows + table design','Grain, composite keys, types, dirty data','done'],
+  ['Postgres in Docker','Volumes, ETL, transactions, idempotency','done'],
+  ['Poll every minute','Logging, error handling, drift free scheduling','done'],
+  ['Station names','Upserts, facts vs dimensions, joins','done'],
+  ['Store only real changes','Duplicate vs redundant data','next'],
+  ['Kafka producer + consumer','Topics, offsets, delivery guarantees','todo'],
+  ['Monthly trip history','Batch ingestion, Parquet, backfills','todo'],
+  ['Airflow DAG','Orchestration, retries, schedules','todo'],
+  ['dbt models + tests','Transformation and data quality','todo'],
+  ['Dashboard','Serving the answer','todo'],
+  ['CI + polish','GitHub Actions, docs','todo']
+];
+const doneCount=STOPS.filter(s=>s[2]==='done').length;
+const route=$('#route');
+route.style.setProperty('--done', ((doneCount-0.5)/STOPS.length*100)+'%');
+route.innerHTML=STOPS.map(([t,d,s],i)=>`
+  <li class="stop ${s}">
+    <span class="dot">${s==='done'?'✓':i+1}</span>
+    <div><h3>${t}</h3><p>${d}</p></div>
+    <span class="badge">${s==='done'?'DONE':s==='next'?'NEXT STOP':'PLANNED'}</span>
+  </li>`).join('');
+
+/* Commands */
+const CMDS=[
+  ['pip install -r requirements.txt','install'],
+  ['docker compose up -d','start Postgres'],
+  ['python load_stations.py','load names'],
+  ['python poller.py','poll every 60s'],
+  ['docker exec -i dockwatch-db psql -U dockwatch -d dockwatch < sql/queries/empty_minutes_named.sql','ask the question']
+];
+$('#cmds').innerHTML=CMDS.map(([c,w],i)=>`<div class="cmd"><code id="c${i}"></code><span class="why">${w}</span><button class="copy" type="button" data-i="${i}">Copy</button></div>`).join('');
+CMDS.forEach(([c],i)=>{ $('#c'+i).textContent=c; });
+document.querySelectorAll('.copy').forEach(b=>b.addEventListener('click',async()=>{
+  const el=$('#c'+b.dataset.i);
+  try{ await navigator.clipboard.writeText(el.textContent); b.textContent='Copied'; }
+  catch(e){ const r=document.createRange(); r.selectNodeContents(el); const s=getSelection(); s.removeAllRanges(); s.addRange(r); b.textContent='Selected'; }
+  setTimeout(()=>b.textContent='Copy',1400);
+}));
+})();
+</script>
