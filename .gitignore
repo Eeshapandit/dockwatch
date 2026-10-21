@@ -7,3 +7,4 @@ data/
 dbt/target/
 dbt/logs/
 .pytest_cache/
+dbt/.user.yml
