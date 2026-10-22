@@ -53,7 +53,7 @@ def main():
             cur.execute("select count(*) from raw.station_information")
             stats["stations_tracked"] = cur.fetchone()[0]
         if table_exists(cur, "raw.station_status"):
-            cur.execute("select count(*), min(last_reported), max(last_reported) from raw.station_status")
+            cur.execute("select count(*), min(last_reported), max(last_reported) from raw.station_status where last_reported >= '2020-01-01'")
             n, lo, hi = cur.fetchone()
             stats.update(status_rows=n, live_from=lo and lo.isoformat(), live_to=hi and hi.isoformat())
 
@@ -76,6 +76,8 @@ def main():
             cur.execute("select count(*), min(source_month), max(source_month), count(distinct source_month) from raw.trips")
             n, m_lo, m_hi, months = cur.fetchone()
             stats.update(trips_loaded=n, trip_months=[m_lo, m_hi] if n else [])
+            cur.execute("select coalesce(max(weekday_days), 0) from marts.mart_hourly_trips")
+            stats["weekdays"] = cur.fetchone()[0]  # used to turn month totals into per weekday averages
             data["hourly"] = [
                 {"hour": r["hour"],
                  "weekday": num(r["weekday_trips"] / r["weekday_days"], 0) if r["weekday_days"] else 0,

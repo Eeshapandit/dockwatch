@@ -1,7 +1,7 @@
 # Refresh the project page data on GitHub's servers (they have internet access).
 # Loads stations, ~2 minutes of live status, the latest month of rides,
 # builds every dbt model, exports docs/data.json and commits it.
-# Runs monthly on the 16th, or by hand from the Actions tab ("Run workflow").
+# Runs monthly on the 16th, or by hand from the Actions tab ("Run workflow"). Exports per weekday averages.
 name: refresh-data
 
 on:

@@ -610,11 +610,13 @@ function sceneForHour(h){
   const maxN = Math.max(1, ...net.map(x=>Math.abs(x[1])));
   const ds = net.filter(x=>x[1]!==0).map(([i,n])=>{ const [x,y]=project(S[i][1],S[i][2]); return {x,y,net:n,rad:2.5 + 9*Math.sqrt(Math.abs(n)/maxN)}; });
   setScene(rs, ds);
+  const days = Math.max(1, (data.stats||{}).weekdays || 1);
+  const avg = n => { const v = n / days; return Math.abs(v) >= 10 ? Math.round(v) : Math.round(v*10)/10; };
   const sorted = [...net].sort((a,b)=>a[1]-b[1]);
   const lose = sorted.slice(0,3).filter(x=>x[1]<0), gain = sorted.slice(-3).reverse().filter(x=>x[1]>0);
   $('#movers').innerHTML =
-    lose.map(([i,n])=>`<div class="mover"><span class="tag l">LOSING</span><span>${esc(S[i][0])}</span><b>${n}</b></div>`).join('') +
-    gain.map(([i,n])=>`<div class="mover"><span class="tag g">GAINING</span><span>${esc(S[i][0])}</span><b>+${n}</b></div>`).join('');
+    lose.map(([i,n])=>`<div class="mover"><span class="tag l">LOSING</span><span>${esc(S[i][0])}</span><b>${avg(n)}</b></div>`).join('') +
+    gain.map(([i,n])=>`<div class="mover"><span class="tag g">GAINING</span><span>${esc(S[i][0])}</span><b>+${avg(n)}</b></div>`).join('');
 }
 function setHour(h){
   hour = h; $('#hour').value = h; $('#mapHour').textContent = hourLabel(h);
@@ -640,7 +642,7 @@ function startReal(d){
   const st = d.stats || {}, months = st.trip_months || [];
   const monthName = m => m ? new Date(+m.slice(0,4), +m.slice(4)-1, 1).toLocaleString('en-US',{month:'long',year:'numeric'}) : '';
   $('#mapKicker').textContent = 'Average weekday' + (months[0] ? ' · ' + monthName(months[1]||months[0]) : '');
-  $('#flowNote').textContent = `${fmt(st.trips_loaded||0)} rides loaded. Showing the ${fmt(Math.max(...Object.values(d.flows||{}).map(v=>v.length),0))} busiest routes and the stations that gain or lose the most each hour. Exported ${String(d.generated_at||'').slice(0,10)}.`;
+  $('#flowNote').textContent = `${fmt(st.trips_loaded||0)} rides loaded. Losing and gaining numbers are net bikes per weekday in that hour, averaged over ${st.weekdays || 'all'} weekdays. Showing the ${fmt(Math.max(...Object.values(d.flows||{}).map(v=>v.length),0))} busiest routes per hour. Exported ${String(d.generated_at||'').slice(0,10)}.`;
   setHour(8); setPlaying(!reduce);
   renderStats(st);
 }
