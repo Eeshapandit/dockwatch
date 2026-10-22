@@ -3,7 +3,7 @@
 MONTH ?= latest
 RUN = docker compose run --rm app
 
-.PHONY: help up migrate stations streaming trips dbt export dashboard airflow showcase test status down
+.PHONY: help up migrate stations streaming trips dbt export dashboard airflow showcase showcase-lite test status down
 
 help:
 	@grep -E '^[a-z]+:.*## ' Makefile | sed 's/:.*## /\t/'
@@ -46,6 +46,17 @@ showcase: ## everything, end to end, then refresh the page data
 	@echo ""
 	@echo "Done. Publish the page data with:"
 	@echo "  git add docs/data.json && git commit -m 'Refresh page data' && git push"
+
+showcase-lite: ## same result as showcase, but downloads run from your terminal (for when containers have no internet)
+	pip install -q -r requirements.txt
+	$(MAKE) migrate
+	python load_stations.py
+	python trips.py --month $(MONTH)
+	$(MAKE) dbt
+	python export_page_data.py
+	@echo ""
+	@echo "Done. Publish the page data with:"
+	@echo "  git add docs/data.json && git commit -m 'Real data' && git push"
 
 test: ## unit tests
 	python -m pytest -q tests
