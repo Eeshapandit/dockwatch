@@ -8,6 +8,7 @@
 x-app: &app
   build: .
   image: dockwatch-app
+  dns: [8.8.8.8, 1.1.1.1]          # Codespaces quirk: containers can't always use the host's DNS
   volumes:
     - .:/app                       # live code + outputs (docs/data.json, data/) land in the repo
   environment:
@@ -101,6 +102,7 @@ services:
     profiles: ["airflow"]
     build: ./airflow
     image: dockwatch-airflow
+    dns: [8.8.8.8, 1.1.1.1]
     command: >
       bash -c "airflow db migrate &&
       (airflow users create -u admin -p admin -f Admin -l User -r Admin -e admin@example.com || true) &&
